@@ -22,9 +22,10 @@ BarWidget {
   readonly property bool showHours: setting("showHours", true)
   readonly property bool showMinutes: setting("showMinutes", true)
   readonly property bool showLabel: setting("showLabel", true)
-  readonly property string currentIconStyle: setting("iconStyle", "custom")
-  readonly property string customEmoji: setting("customEmoji", "🎯")
+  readonly property string currentIconStyle: setting("iconStyle", "medical")
+  readonly property string customEmoji: setting("customEmoji", "\uf0f0")
   readonly property string currentBadgeStyle: setting("badgeStyle", "flat")
+  readonly property bool currentGradientColor: setting("gradientColor", true)
   readonly property int currentUrgentThresholdDays: setting("urgentThresholdDays", 7)
   readonly property bool currentShowNotifications: setting("showNotifications", true)
 
@@ -54,6 +55,18 @@ BarWidget {
 
   readonly property bool isUrgentState: Model.isUrgent(countdownStats, currentUrgentThresholdDays)
   readonly property string activeIcon: Model.getIcon(currentIconStyle, customEmoji)
+
+  // Dynamic Timeline Gradient Color (Green -> Yellow -> Orange -> Red)
+  readonly property color dynamicColor: {
+    if (isUrgentState) {
+      return root.bar ? root.bar.urgent : Color.urgent
+    }
+    if (currentGradientColor && countdownStats) {
+      return Model.getProgressColor(countdownStats.ratioRemaining, countdownStats.isPast)
+    }
+    return root.bar ? root.bar.barForeground : Color.foreground
+  }
+
   readonly property string activeText: Model.formatBarText(countdownStats, {
     format: currentFormat,
     showYears: showYears,
@@ -285,6 +298,9 @@ BarWidget {
         }
         border.width: 1
         border.color: {
+          if (root.currentGradientColor) {
+            return Qt.rgba(root.dynamicColor.r, root.dynamicColor.g, root.dynamicColor.b, 0.35)
+          }
           if (root.isUrgentState) {
             return root.bar ? root.bar.urgent : Color.urgent
           }
@@ -299,9 +315,7 @@ BarWidget {
           anchors.bottom: parent.bottom
           width: Math.max(0, parent.width * (root.countdownStats ? root.countdownStats.ratioElapsed : 0))
           radius: parent.radius
-          color: root.isUrgentState
-            ? (root.bar ? Qt.rgba(root.bar.urgent.r, root.bar.urgent.g, root.bar.urgent.b, 0.28) : Qt.rgba(1, 0.3, 0.3, 0.28))
-            : Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.18)
+          color: Qt.rgba(root.dynamicColor.r, root.dynamicColor.g, root.dynamicColor.b, 0.22)
         }
       }
 
@@ -311,11 +325,9 @@ BarWidget {
         bar: root.bar
         text: root.fullLabel
         active: root.isUrgentState
-        activeColor: root.bar ? root.bar.urgent : Color.urgent
-        useActiveColor: root.isUrgentState
-        foreground: root.isUrgentState
-          ? (root.bar ? root.bar.urgent : Color.urgent)
-          : (root.bar ? root.bar.barForeground : Color.foreground)
+        activeColor: root.dynamicColor
+        useActiveColor: root.isUrgentState || root.currentGradientColor
+        foreground: root.dynamicColor
         horizontalMargin: root.currentBadgeStyle !== "flat" ? 6 : 8
         verticalPadding: 4
         fontSize: Style.font.body
@@ -355,7 +367,7 @@ BarWidget {
           text: root.activeIcon
           fontFamily: Style.font.family
           fontSize: Style.font.caption
-          color: root.isUrgentState ? (root.bar ? root.bar.urgent : Color.urgent) : (root.bar ? root.bar.barForeground : Color.foreground)
+          color: root.dynamicColor
         }
 
         OpticalGlyph {
@@ -364,7 +376,7 @@ BarWidget {
           text: root.countdownStats ? (root.countdownStats.totalDays + "d") : "?"
           fontFamily: Style.font.family
           fontSize: Style.font.tiny || 9
-          color: root.isUrgentState ? (root.bar ? root.bar.urgent : Color.urgent) : (root.bar ? root.bar.barForeground : Color.foreground)
+          color: root.dynamicColor
         }
       }
 
@@ -409,7 +421,8 @@ BarWidget {
         spacing: Style.spacing.sm
 
         Text {
-          text: root.activeIcon !== "" ? root.activeIcon : "⏳"
+          text: root.activeIcon !== "" ? root.activeIcon : "\uf0f0"
+          color: root.dynamicColor
           font.family: Style.font.family
           font.pixelSize: Style.font.title
           anchors.verticalCenter: parent.verticalCenter
@@ -447,19 +460,15 @@ BarWidget {
       PanelSeparator { foreground: Color.foreground }
 
       // -----------------------------------------------------------
-      // Live Hero Preview Card
+      // Live Hero Preview Card (Dynamic Gradient Accents)
       // -----------------------------------------------------------
       Rectangle {
         width: parent.width
         height: Style.space(74)
         radius: Style.cornerRadius
-        color: root.isUrgentState
-          ? (root.bar ? Qt.rgba(root.bar.urgent.r, root.bar.urgent.g, root.bar.urgent.b, 0.16) : Qt.rgba(1, 0.3, 0.3, 0.16))
-          : Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.12)
+        color: Qt.rgba(root.dynamicColor.r, root.dynamicColor.g, root.dynamicColor.b, 0.12)
         border.width: 1
-        border.color: root.isUrgentState
-          ? (root.bar ? root.bar.urgent : Color.urgent)
-          : Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.35)
+        border.color: Qt.rgba(root.dynamicColor.r, root.dynamicColor.g, root.dynamicColor.b, 0.40)
 
         Column {
           anchors.fill: parent
@@ -482,7 +491,7 @@ BarWidget {
 
             Text {
               text: root.countdownStats ? (root.countdownStats.isPast ? "Elapsed" : "Remaining") : "—"
-              color: root.isUrgentState ? Color.urgent : Color.accent
+              color: root.dynamicColor
               font.family: Style.font.family
               font.pixelSize: Style.font.caption
               font.bold: true
@@ -499,7 +508,7 @@ BarWidget {
               showHours: root.showHours,
               showMinutes: root.showMinutes
             }) : "Set target date below"
-            color: Color.foreground
+            color: root.dynamicColor
             font.family: Style.font.family
             font.pixelSize: Style.font.subtitle
             font.bold: true
@@ -518,7 +527,7 @@ BarWidget {
               height: parent.height
               radius: parent.radius
               width: Math.max(0, parent.width * (root.countdownStats ? root.countdownStats.ratioElapsed : 0))
-              color: root.isUrgentState ? Color.urgent : Color.accent
+              color: root.dynamicColor
             }
           }
         }
@@ -648,7 +657,7 @@ BarWidget {
       }
 
       // -----------------------------------------------------------
-      // Display Units Configuration (The Core Customization)
+      // Display Units Configuration
       // -----------------------------------------------------------
       PanelSectionHeader {
         text: "DISPLAY UNITS (YEAR, MONTH, DAY, HRS, MINS)"
@@ -725,10 +734,10 @@ BarWidget {
       }
 
       // -----------------------------------------------------------
-      // Appearance & Icons (2-Row Layout + Custom Emoji Input)
+      // Appearance & Icons (Omarchy Nerd Font Glyphs)
       // -----------------------------------------------------------
       PanelSectionHeader {
-        text: "ICON & BADGE STYLE"
+        text: "ICONS & GLYPHS (OMARCHY NERD FONTS)"
         foreground: Color.foreground
       }
 
@@ -741,11 +750,12 @@ BarWidget {
           width: parent.width
           spacing: Style.spacing.xs
           options: [
-            { value: "custom", label: "Custom", tooltip: "Use custom emoji below" },
-            { value: "hourglass", label: "⌛ Glass", tooltip: "Hourglass icon" },
-            { value: "calendar", label: "📅 Cal", tooltip: "Calendar icon" }
+            { value: "medical", label: "\uf0f0 Med", tooltip: "Medical / Doctor" },
+            { value: "clock", label: "\uf017 Clock", tooltip: "Clock timer" },
+            { value: "hourglass", label: "\uf252 Glass", tooltip: "Hourglass" },
+            { value: "calendar", label: "\uf073 Cal", tooltip: "Calendar event" }
           ]
-          value: (root.currentIconStyle === "custom" || root.currentIconStyle === "hourglass" || root.currentIconStyle === "calendar") ? root.currentIconStyle : ""
+          value: (root.currentIconStyle === "medical" || root.currentIconStyle === "clock" || root.currentIconStyle === "hourglass" || root.currentIconStyle === "calendar") ? root.currentIconStyle : ""
           onChanged: function(val) { root.updateSetting("iconStyle", val) }
         }
 
@@ -754,22 +764,58 @@ BarWidget {
           width: parent.width
           spacing: Style.spacing.xs
           options: [
-            { value: "clock", label: "\uf017 Clock", tooltip: "Nerd Font Clock" },
-            { value: "sparkles", label: "✨ Star", tooltip: "Sparkles icon" },
-            { value: "none", label: "Off", tooltip: "No icon" }
+            { value: "target", label: "\uf140 Target", tooltip: "Goal target" },
+            { value: "grad", label: "\uf19d Grad", tooltip: "Graduation / Exam" },
+            { value: "book", label: "\uf02d Book", tooltip: "Study / Preparation" },
+            { value: "star", label: "\uf005 Star", tooltip: "Milestone star" }
           ]
-          value: (root.currentIconStyle === "clock" || root.currentIconStyle === "sparkles" || root.currentIconStyle === "none") ? root.currentIconStyle : ""
+          value: (root.currentIconStyle === "target" || root.currentIconStyle === "grad" || root.currentIconStyle === "book" || root.currentIconStyle === "star") ? root.currentIconStyle : ""
           onChanged: function(val) { root.updateSetting("iconStyle", val) }
         }
 
-        // Custom Emoji Input
+        // Icon Row 3
+        ButtonGroup {
+          width: parent.width
+          spacing: Style.spacing.xs
+          options: [
+            { value: "plane", label: "\uf072 Trip", tooltip: "Vacation / Travel" },
+            { value: "heart", label: "\uf004 Heart", tooltip: "Anniversary / Life" },
+            { value: "bolt", label: "\uf0e7 Bolt", tooltip: "Rush / High priority" },
+            { value: "none", label: "Off", tooltip: "No icon" }
+          ]
+          value: (root.currentIconStyle === "plane" || root.currentIconStyle === "heart" || root.currentIconStyle === "bolt" || root.currentIconStyle === "none") ? root.currentIconStyle : ""
+          onChanged: function(val) { root.updateSetting("iconStyle", val) }
+        }
+
+        // Row 4: Custom Glyph & Badge
+        Row {
+          width: parent.width
+          spacing: Style.spacing.xs
+
+          Button {
+            text: root.currentIconStyle === "custom" ? "✓ Custom Glyph" : "Custom Glyph"
+            tooltipText: "Enter custom Nerd Font glyph or text"
+            width: (parent.width - Style.spacing.xs) / 2
+            onClicked: root.updateSetting("iconStyle", "custom")
+          }
+
+          Button {
+            text: "Cycle Icon"
+            iconText: "\udb80\udce4"
+            tooltipText: "Cycle through all icons"
+            width: (parent.width - Style.spacing.xs) / 2
+            onClicked: root.cycleIconStyle()
+          }
+        }
+
+        // Custom Emoji/Glyph Input
         Row {
           width: parent.width
           spacing: Style.spacing.sm
           visible: root.currentIconStyle === "custom"
 
           Text {
-            text: "Emoji:"
+            text: "Glyph:"
             color: Color.foreground
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
@@ -779,10 +825,15 @@ BarWidget {
 
           TextField {
             width: parent.width - Style.space(55)
-            placeholderText: "Type or paste any emoji (e.g. 🎯, 🩺, ✈️, 🎓, 💍)"
+            placeholderText: "Enter glyph (e.g. \\uf0f0 or text)"
             text: root.customEmoji
             onTextChanged: root.updateSetting("customEmoji", text)
           }
+        }
+
+        PanelSectionHeader {
+          text: "BADGE STYLE"
+          foreground: Color.foreground
         }
 
         ButtonGroup {
@@ -827,7 +878,7 @@ BarWidget {
       }
 
       // -----------------------------------------------------------
-      // Preferences & Alerts
+      // Preferences & Dynamic Features
       // -----------------------------------------------------------
       PanelSectionHeader {
         text: "PREFERENCES"
@@ -840,8 +891,16 @@ BarWidget {
 
         Toggle {
           width: parent.width
+          label: "Dynamic Timeline Gradient"
+          description: "Smoothly shifts color from Green to Red as deadline nears"
+          checked: root.currentGradientColor
+          onClicked: root.updateSetting("gradientColor", !root.currentGradientColor)
+        }
+
+        Toggle {
+          width: parent.width
           label: "Milestone Notifications"
-          description: "Alert on crossing 90%, 80%, 70%, ..., 10% remaining"
+          description: "Receive desktop checkpoints as your deadline approaches"
           checked: root.currentShowNotifications
           onClicked: root.updateSetting("showNotifications", !root.currentShowNotifications)
         }

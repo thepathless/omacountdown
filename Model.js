@@ -337,25 +337,85 @@ function formatDetailed(stats, settings) {
 
 /**
  * Returns icon character / glyph.
- * Supports custom user emoji, standard Nerd Font glyphs, or presets.
+ * Uses authentic Omarchy Nerd Font glyphs that respect system colors and themes.
  */
 function getIcon(iconStyle, customEmoji) {
   switch (iconStyle) {
-    case "custom":
-      return (customEmoji && customEmoji.trim() !== "") ? customEmoji.trim() : "🎯";
-    case "hourglass":
-      return "⌛";
-    case "calendar":
-      return "📅";
+    case "medical":
+      return "\uf0f0"; // nf-fa-user_md / stethoscope
     case "clock":
       return "\uf017"; // nf-fa-clock_o
-    case "sparkles":
-      return "✨";
+    case "hourglass":
+      return "\uf252"; // nf-fa-hourglass
+    case "calendar":
+      return "\uf073"; // nf-fa-calendar
+    case "target":
+      return "\uf140"; // nf-fa-bullseye
+    case "grad":
+      return "\uf19d"; // nf-fa-graduation_cap
+    case "book":
+      return "\uf02d"; // nf-fa-book
+    case "star":
+      return "\uf005"; // nf-fa-star
+    case "plane":
+      return "\uf072"; // nf-fa-plane
+    case "heart":
+      return "\uf004"; // nf-fa-heart
+    case "bolt":
+      return "\uf0e7"; // nf-fa-bolt
+    case "custom":
+      return (customEmoji && customEmoji.trim() !== "") ? customEmoji.trim() : "\uf0f0";
     case "none":
       return "";
     default:
-      return (customEmoji && customEmoji.trim() !== "") ? customEmoji.trim() : "🎯";
+      return "\uf0f0";
   }
+}
+
+/**
+ * Computes dynamic timeline gradient color from Green -> Yellow -> Orange -> Red
+ * based on the percentage of time remaining (1.0 = 100% left to 0.0 = 0% left).
+ */
+function getProgressColor(ratioRemaining, isPast) {
+  if (isPast) return "#ff5555"; // Red / Expired
+
+  var r = Math.min(1.0, Math.max(0.0, ratioRemaining));
+
+  // 4-stop gradient:
+  // 1.0 -> Lush Green (rgb: 80, 250, 123)
+  // 0.6 -> Warm Gold / Yellow (rgb: 241, 250, 140)
+  // 0.25 -> Coral / Orange (rgb: 255, 184, 108)
+  // 0.0 -> Crimson / Red (rgb: 255, 85, 85)
+
+  var red = 0;
+  var green = 0;
+  var blue = 0;
+
+  if (r >= 0.6) {
+    // Green (1.0) to Yellow (0.6)
+    var t = (r - 0.6) / 0.4;
+    red = Math.round(241 + (80 - 241) * t);
+    green = Math.round(250 + (250 - 250) * t);
+    blue = Math.round(140 + (123 - 140) * t);
+  } else if (r >= 0.25) {
+    // Yellow (0.6) to Orange (0.25)
+    var t = (r - 0.25) / 0.35;
+    red = Math.round(255 + (241 - 255) * t);
+    green = Math.round(184 + (250 - 184) * t);
+    blue = Math.round(108 + (140 - 108) * t);
+  } else {
+    // Orange (0.25) to Red (0.0)
+    var t = r / 0.25;
+    red = Math.round(255 + (255 - 255) * t);
+    green = Math.round(85 + (184 - 85) * t);
+    blue = Math.round(85 + (108 - 85) * t);
+  }
+
+  var hexR = (red < 16 ? "0" : "") + red.toString(16);
+  var hexG = (green < 16 ? "0" : "") + green.toString(16);
+  var hexB = (blue < 16 ? "0" : "") + blue.toString(16);
+
+  return "#" + hexR + hexG + hexB;
 }
 
 /**
@@ -465,7 +525,7 @@ function nextFormat(current) {
  * Cycles to the next available icon style.
  */
 function nextIconStyle(current) {
-  var styles = ["custom", "hourglass", "calendar", "clock", "sparkles", "none"];
+  var styles = ["medical", "clock", "hourglass", "calendar", "target", "grad", "book", "star", "plane", "heart", "bolt", "custom", "none"];
   var idx = styles.indexOf(current);
   if (idx === -1) return styles[0];
   return styles[(idx + 1) % styles.length];

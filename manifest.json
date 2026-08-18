@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "id": "omacountdown",
   "name": "OmaCountdown",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "author": "Suva",
-  "description": "Elegant countdown timer to any custom date and time with configurable units (years, months, days, hours, minutes), custom emoji, percentage milestone notifications, and Omarchy aesthetics.",
+  "description": "Elegant countdown timer to any custom date and time with configurable units, Omarchy Nerd Font glyphs, dynamic green-to-red timeline gradient, and desktop notifications.",
   "kinds": [
     "bar-widget"
   ],
@@ -29,9 +29,10 @@
       "showHours": true,
       "showMinutes": true,
       "showLabel": true,
-      "iconStyle": "custom",
-      "customEmoji": "🎯",
+      "iconStyle": "medical",
+      "customEmoji": "\uf0f0",
       "badgeStyle": "flat",
+      "gradientColor": true,
       "urgentThresholdDays": 7,
       "showNotifications": true
     },
@@ -62,7 +63,7 @@
         "type": "string",
         "label": "Start Date",
         "defaultValue": "",
-        "description": "Timestamp when countdown was started, used for 100% to 10% milestone notifications."
+        "description": "Timestamp when countdown was started, used for gradient timeline and milestone checkpoints."
       },
       {
         "key": "format",
@@ -126,22 +127,29 @@
         "type": "enum",
         "label": "Icon Style",
         "options": [
-          "custom",
+          "medical",
+          "clock",
           "hourglass",
           "calendar",
-          "clock",
-          "sparkles",
+          "target",
+          "grad",
+          "book",
+          "star",
+          "plane",
+          "heart",
+          "bolt",
+          "custom",
           "none"
         ],
-        "defaultValue": "custom",
-        "description": "Prefix icon style: 'custom' (user custom emoji), 'hourglass' (⌛), 'calendar' (📅), 'clock' (󰥔), 'sparkles' (✨), or 'none'."
+        "defaultValue": "medical",
+        "description": "Prefix icon style following Omarchy Nerd Font theme typography."
       },
       {
         "key": "customEmoji",
         "type": "string",
-        "label": "Custom Emoji",
-        "defaultValue": "🎯",
-        "description": "Custom emoji or text displayed when iconStyle is 'custom' (e.g. 🎯, 🩺, ✈️, 🎓, 💍)."
+        "label": "Custom Glyph / Text",
+        "defaultValue": "\uf0f0",
+        "description": "Custom Nerd Font glyph or text when iconStyle is 'custom'."
       },
       {
         "key": "badgeStyle",
@@ -154,6 +162,13 @@
         ],
         "defaultValue": "flat",
         "description": "'flat' transparent background, 'pill' rounded capsule border, 'progress' dynamic timeline completion fill."
+      },
+      {
+        "key": "gradientColor",
+        "type": "boolean",
+        "label": "Dynamic Timeline Gradient",
+        "defaultValue": true,
+        "description": "Smoothly transitions widget text and accent color from Green to Red as the deadline approaches."
       },
       {
         "key": "urgentThresholdDays",
@@ -170,7 +185,7 @@
         "type": "boolean",
         "label": "Milestone Desktop Notifications",
         "defaultValue": true,
-        "description": "Send desktop notification when reaching milestone checkpoints (90%, 80%, 70%, 60%, 50%, 40%, 30%, 20%, 10% remaining)."
+        "description": "Receive desktop checkpoints as your deadline approaches."
       }
     ]
   }
