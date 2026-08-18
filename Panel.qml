@@ -117,7 +117,6 @@ Panel {
     owner: root.barIdentity
     bar: root.bar
     open: root.opened
-    centerOnBar: true
     focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(Style.space(400))
     contentHeight: panel.fittedContentHeight(panelColumn.implicitHeight)
@@ -290,7 +289,7 @@ Panel {
                 width: parent.width - 55
                 placeholderText: "e.g. Project Launch"
                 text: root.editName
-                onEditingFinished: root.editName = text
+                onTextChanged: root.editName = text
               }
             }
 
@@ -312,7 +311,7 @@ Panel {
                 width: parent.width - 55
                 placeholderText: "YYYY-MM-DD"
                 text: root.editDate
-                onEditingFinished: root.editDate = text
+                onTextChanged: root.editDate = text
               }
             }
 
@@ -334,7 +333,7 @@ Panel {
                 width: parent.width - 55
                 placeholderText: "HH:MM (optional)"
                 text: root.editTime
-                onEditingFinished: root.editTime = text
+                onTextChanged: root.editTime = text
               }
             }
 
@@ -435,13 +434,13 @@ Panel {
               anchors.verticalCenter: parent.verticalCenter
             }
 
-            TextField {
-              id: emojiInput
-              width: parent.width - 55
-              placeholderText: "Type or paste an emoji"
-              text: root.customEmoji
-              onEditingFinished: root.persistSetting("customEmoji", text)
-            }
+              TextField {
+                id: emojiInput
+                width: parent.width - 55
+                placeholderText: "Type or paste an emoji"
+                text: root.customEmoji
+                onTextChanged: root.persistSetting("customEmoji", text)
+              }
           }
 
           PanelSectionHeader {
