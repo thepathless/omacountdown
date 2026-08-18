@@ -48,61 +48,14 @@ BarWidget {
       lines.push("Click to select one");
     }
     lines.push("");
-    lines.push("• Left-click: Select countdown");
-    lines.push("• Middle-click: Cycle countdowns");
+    lines.push("• Left-click: Select");
+    lines.push("• Middle-click: Cycle");
     lines.push("• Right-click: Settings");
     return lines.join("\n");
   }
 
   function updateTime() {
     countdown = selectedEntry ? Model.calculateCountdown(clock.date, selectedEntry.date, selectedEntry.time) : null;
-  }
-
-  function selectNext() {
-    var next = Model.nextIndex(countdowns, selectedIndex);
-    updateSetting("selectedIndex", next);
-  }
-
-  function selectIndex(idx) {
-    updateSetting("selectedIndex", idx);
-  }
-
-  function addCountdown(name, date, time) {
-    var list = [];
-    for (var i = 0; i < countdowns.length; i++) {
-      var c = countdowns[i];
-      list.push({ name: c.name, date: c.date, time: c.time });
-    }
-    list.push({ name: name, date: date, time: time || "" });
-    updateSetting("countdowns", list);
-    updateSetting("selectedIndex", list.length - 1);
-  }
-
-  function removeCountdown(idx) {
-    if (idx < 0 || idx >= countdowns.length) return;
-    var list = [];
-    for (var i = 0; i < countdowns.length; i++) {
-      if (i === idx) continue;
-      var c = countdowns[i];
-      list.push({ name: c.name, date: c.date, time: c.time });
-    }
-    var newSel = Math.min(selectedIndex, Math.max(0, list.length - 1));
-    updateSetting("countdowns", list);
-    updateSetting("selectedIndex", newSel);
-  }
-
-  function updateCountdown(idx, name, date, time) {
-    if (idx < 0 || idx >= countdowns.length) return;
-    var list = [];
-    for (var i = 0; i < countdowns.length; i++) {
-      var c = countdowns[i];
-      if (i === idx) {
-        list.push({ name: name, date: date, time: time || "" });
-      } else {
-        list.push({ name: c.name, date: c.date, time: c.time });
-      }
-    }
-    updateSetting("countdowns", list);
   }
 
   function updateSetting(key, val) {
@@ -115,49 +68,30 @@ BarWidget {
     }
   }
 
-  function moveToSection(targetSection) {
-    if (targetSection !== "left" && targetSection !== "center" && targetSection !== "right") return;
-    if (targetSection === currentBarSection) return;
-    if (root.bar && root.bar.shell && typeof root.bar.shell.mutateShellConfig === "function") {
-      root.bar.shell.mutateShellConfig(function(config) {
-        if (!config.bar) config.bar = {};
-        if (!config.bar.layout) config.bar.layout = {};
-        var sections = ["left", "center", "right"];
-        var movedEntry = null;
-        for (var s = 0; s < sections.length; s++) {
-          var arr = config.bar.layout[sections[s]];
-          if (Array.isArray(arr)) {
-            for (var i = 0; i < arr.length; i++) {
-              var item = arr[i];
-              var id = typeof item === "string" ? item : (item ? item.id : "");
-              if (id === root.moduleName) {
-                movedEntry = arr.splice(i, 1)[0];
-                break;
-              }
-            }
-          }
-        }
-        if (!movedEntry) movedEntry = { id: root.moduleName };
-        if (!Array.isArray(config.bar.layout[targetSection])) config.bar.layout[targetSection] = [];
-        config.bar.layout[targetSection].push(movedEntry);
-      });
-    }
+  // ---- Panel loader pattern (KeyboardPanel for settings) ----
+  readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
+  readonly property bool popoutSwitchClosing: panelLoader.item ? panelLoader.item.popoutSwitchClosing === true : false
+
+  function open() {
+    if (panelLoader.item) panelLoader.item.open();
+  }
+  function close() {
+    if (panelLoader.item) panelLoader.item.close();
+  }
+  function togglePanel() {
+    if (panelLoader.item) panelLoader.item.toggle();
+  }
+  function closeForPopoutSwitch() {
+    if (panelLoader.item) panelLoader.item.closeForPopoutSwitch();
   }
 
-  readonly property string currentBarSection: {
-    if (!root.bar || !root.bar.shell || !root.bar.shell.shellConfig) return "right";
-    var config = root.bar.shell.shellConfig;
-    if (!config.bar || !config.bar.layout) return "right";
-    var sections = ["left", "center", "right"];
-    for (var s = 0; s < sections.length; s++) {
-      var arr = config.bar.layout[sections[s]] || [];
-      for (var i = 0; i < arr.length; i++) {
-        var item = arr[i];
-        var id = typeof item === "string" ? item : (item ? item.id : "");
-        if (id === root.moduleName) return sections[s];
-      }
-    }
-    return "right";
+  function injectPanel() {
+    var target = panelLoader.item;
+    if (!target) return;
+    if ("bar" in target) target.bar = root.bar;
+    if ("settings" in target) target.settings = root.settings;
+    if ("anchorItem" in target) target.anchorItem = button;
+    if ("hostWidget" in target) target.hostWidget = root;
   }
 
   Component.onCompleted: { updateTime(); }
@@ -171,11 +105,13 @@ BarWidget {
   IpcHandler {
     target: "suva.mimo-countdown"
     function refresh(): void { root.updateTime(); }
-    function selectNext(): void { root.selectNext(); }
+    function selectNext(): void {
+      if (panelLoader.item) panelLoader.item.cycleNext();
+    }
     function toggle(): void { selectPopup.open = !selectPopup.open; }
     function open(): void { selectPopup.open = true; }
     function close(): void { selectPopup.open = false; }
-    function settings(): void { settingsPopup.open = !settingsPopup.open; }
+    function settings(): void { root.togglePanel(); }
   }
 
   implicitWidth: root.vertical
@@ -184,6 +120,20 @@ BarWidget {
   implicitHeight: root.vertical
     ? (verticalColumn.implicitHeight + 8)
     : barSize
+
+  onBarChanged: injectPanel()
+  onSettingsChanged: injectPanel()
+
+  Loader {
+    id: panelLoader
+    active: true
+    source: Qt.resolvedUrl("Panel.qml")
+    visible: false
+    onLoaded: {
+      root.injectPanel();
+      Qt.callLater(root.injectPanel);
+    }
+  }
 
   Item {
     id: widgetContainer
@@ -212,7 +162,7 @@ BarWidget {
       }
 
       WidgetButton {
-        id: buttonHorizontal
+        id: button
         anchors.centerIn: parent
         bar: root.bar
         text: root.fullLabel
@@ -228,10 +178,24 @@ BarWidget {
         tooltipText: root.tooltipInfo
 
         onPressed: function(btn) {
-          if (btn === Qt.MiddleButton) root.selectNext();
-          else selectPopup.open = !selectPopup.open;
+          if (btn === Qt.MiddleButton) {
+            if (panelLoader.item) panelLoader.item.cycleNext();
+          } else {
+            selectPopup.open = !selectPopup.open;
+          }
         }
-        onWheelMoved: function(delta) { root.selectNext(); }
+        onWheelMoved: function(delta) {
+          if (panelLoader.item) panelLoader.item.cycleNext();
+        }
+      }
+
+      // Hidden button for Panel anchorItem
+      WidgetButton {
+        id: buttonHorizontal
+        anchors.centerIn: parent
+        bar: root.bar
+        text: root.fullLabel
+        visible: false
       }
     }
 
@@ -271,10 +235,15 @@ BarWidget {
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
         onClicked: function(mouse) {
-          if (mouse.button === Qt.MiddleButton) root.selectNext();
-          else selectPopup.open = !selectPopup.open;
+          if (mouse.button === Qt.MiddleButton) {
+            if (panelLoader.item) panelLoader.item.cycleNext();
+          } else {
+            selectPopup.open = !selectPopup.open;
+          }
         }
-        onWheel: function(wheel) { root.selectNext(); }
+        onWheel: function(wheel) {
+          if (panelLoader.item) panelLoader.item.cycleNext();
+        }
         onEntered: if (root.bar) root.bar.showTooltip(root, root.tooltipInfo)
         onExited: if (root.bar) root.bar.hideTooltip(root)
       }
@@ -282,11 +251,11 @@ BarWidget {
   }
 
   // ----------------------------------------------------------------
-  // Quick-Select Popup — left-click shows this
+  // Quick-Select Popup (no keyboard input needed)
   // ----------------------------------------------------------------
   PopupCard {
     id: selectPopup
-    anchorItem: root
+    anchorItem: button
     bar: root.bar
     contentWidth: Style.space(340)
     contentHeight: fittedContentHeight(selectContent.implicitHeight)
@@ -397,7 +366,10 @@ BarWidget {
           MouseArea {
             anchors.fill: parent
             cursorShape: Qt.PointingHandCursor
-            onClicked: { root.selectIndex(index); selectPopup.close(); }
+            onClicked: {
+              if (panelLoader.item) panelLoader.item.selectEntry(index);
+              selectPopup.close();
+            }
           }
         }
       }
@@ -420,367 +392,10 @@ BarWidget {
         text: "Settings"
         iconText: "\uf013"
         tooltipText: "Add, edit, or remove countdowns"
-        onClicked: { selectPopup.close(); settingsPopup.open = true; }
-      }
-    }
-  }
-
-  // ----------------------------------------------------------------
-  // Settings Popup — manage countdowns
-  // ----------------------------------------------------------------
-  PopupCard {
-    id: settingsPopup
-    anchorItem: root
-    bar: root.bar
-    contentWidth: Style.space(420)
-    contentHeight: fittedContentHeight(settingsContent.implicitHeight)
-    open: false
-    triggerMode: "manual"
-
-    property int editingIndex: -1
-    property string editName: ""
-    property string editDate: ""
-    property string editTime: ""
-
-    function openAdd() {
-      editingIndex = -1;
-      editName = "";
-      editDate = "";
-      editTime = "";
-      open = true;
-    }
-
-    function openEdit(idx) {
-      editingIndex = idx;
-      var c = root.countdowns[idx];
-      editName = c.name || "";
-      editDate = c.date || "";
-      editTime = c.time || "";
-      open = true;
-    }
-
-    function save() {
-      if (!Model.isValidDate(editDate)) return;
-      if (editingIndex >= 0) {
-        root.updateCountdown(editingIndex, editName, editDate, editTime);
-      } else {
-        root.addCountdown(editName, editDate, editTime);
-      }
-      open = false;
-    }
-
-    Column {
-      id: settingsContent
-      width: parent.width
-      spacing: Style.spacing.md
-
-      Row {
-        width: parent.width
-        spacing: Style.spacing.sm
-
-        Text {
-          text: "\uf013"
-          font.family: Style.font.family
-          font.pixelSize: Style.font.title
-          anchors.verticalCenter: parent.verticalCenter
+        onClicked: {
+          selectPopup.close();
+          root.togglePanel();
         }
-
-        Column {
-          width: parent.width - Style.space(60)
-          spacing: 1
-          anchors.verticalCenter: parent.verticalCenter
-
-          Text {
-            text: "Mimo Countdown"
-            color: Color.foreground
-            font.family: Style.font.family
-            font.pixelSize: Style.font.subtitle
-            font.bold: true
-          }
-
-          Text {
-            text: "Manage your countdowns"
-            color: Color.muted
-            font.family: Style.font.family
-            font.pixelSize: Style.font.caption
-          }
-        }
-
-        Button {
-          iconText: "\udb80\udd56"
-          tooltipText: "Close"
-          anchors.verticalCenter: parent.verticalCenter
-          onClicked: settingsPopup.close()
-        }
-      }
-
-      PanelSeparator { foreground: Color.foreground }
-
-      // ---- Countdown list ----
-      PanelSectionHeader {
-        text: "COUNTDOWNS"
-        foreground: Color.foreground
-      }
-
-      Repeater {
-        model: root.countdowns
-
-        Rectangle {
-          width: settingsContent.width
-          height: 40
-          radius: 6
-          color: index === root.selectedIndex
-            ? (root.bar ? Qt.rgba(root.bar.accent.r, root.bar.accent.g, root.bar.accent.b, 0.15) : Qt.rgba(0.4, 0.6, 1.0, 0.15))
-            : "transparent"
-
-          property var entry: modelData
-
-          Row {
-            anchors.fill: parent
-            anchors.margins: 4
-            spacing: 8
-
-            Text {
-              text: entry.name || "Unnamed"
-              color: Color.foreground
-              font.family: Style.font.family
-              font.pixelSize: Style.font.body
-              width: parent.width - 120
-              anchors.verticalCenter: parent.verticalCenter
-              elide: Text.ElideRight
-            }
-
-            Text {
-              text: entry.date
-              color: Color.muted
-              font.family: Style.font.family
-              font.pixelSize: Style.font.caption
-              anchors.verticalCenter: parent.verticalCenter
-              width: 70
-            }
-
-            Row {
-              spacing: 4
-              anchors.verticalCenter: parent.verticalCenter
-
-              Button {
-                iconText: "\uf040"
-                tooltipText: "Edit"
-                onClicked: settingsPopup.openEdit(index)
-              }
-
-              Button {
-                iconText: "\uf2ed"
-                tooltipText: "Remove"
-                onClicked: root.removeCountdown(index)
-              }
-            }
-          }
-        }
-      }
-
-      Text {
-        visible: root.countdowns.length === 0
-        text: "No countdowns. Add one below."
-        color: Color.muted
-        font.family: Style.font.family
-        font.pixelSize: Style.font.body
-        width: parent.width
-        horizontalAlignment: Text.AlignHCenter
-      }
-
-      Button {
-        width: parent.width
-        text: "Add Countdown"
-        iconText: "\uf067"
-        tooltipText: "Add a new countdown"
-        onClicked: settingsPopup.openAdd()
-      }
-
-      PanelSeparator { foreground: Color.foreground }
-
-      // ---- Add / Edit form (inline) ----
-      PanelSectionHeader {
-        text: settingsPopup.editingIndex >= 0 ? "EDIT COUNTDOWN" : "NEW COUNTDOWN"
-        foreground: Color.foreground
-      }
-
-      Column {
-        width: parent.width
-        spacing: Style.spacing.sm
-
-        Row {
-          width: parent.width
-          spacing: Style.spacing.sm
-
-          Text {
-            text: "Name:"
-            color: Color.foreground
-            font.family: Style.font.family
-            font.pixelSize: Style.font.body
-            width: 50
-            anchors.verticalCenter: parent.verticalCenter
-          }
-
-          TextField {
-            width: parent.width - 55
-            placeholderText: "e.g. Project Launch"
-            text: settingsPopup.editName
-            onTextChanged: settingsPopup.editName = text
-          }
-        }
-
-        Row {
-          width: parent.width
-          spacing: Style.spacing.sm
-
-          Text {
-            text: "Date:"
-            color: Color.foreground
-            font.family: Style.font.family
-            font.pixelSize: Style.font.body
-            width: 50
-            anchors.verticalCenter: parent.verticalCenter
-          }
-
-          TextField {
-            width: parent.width - 55
-            placeholderText: "YYYY-MM-DD"
-            text: settingsPopup.editDate
-            onTextChanged: settingsPopup.editDate = text
-          }
-        }
-
-        Row {
-          width: parent.width
-          spacing: Style.spacing.sm
-
-          Text {
-            text: "Time:"
-            color: Color.foreground
-            font.family: Style.font.family
-            font.pixelSize: Style.font.body
-            width: 50
-            anchors.verticalCenter: parent.verticalCenter
-          }
-
-          TextField {
-            width: parent.width - 55
-            placeholderText: "HH:MM (optional)"
-            text: settingsPopup.editTime
-            onTextChanged: settingsPopup.editTime = text
-          }
-        }
-
-        Row {
-          width: parent.width
-          spacing: Style.spacing.sm
-
-          Button {
-            text: settingsPopup.editingIndex >= 0 ? "Save" : "Add"
-            iconText: "\uf00c"
-            width: parent.width / 2
-            enabled: Model.isValidDate(settingsPopup.editDate)
-            onClicked: settingsPopup.save()
-          }
-
-          Button {
-            text: "Cancel"
-            iconText: "\uf00d"
-            width: parent.width / 2
-            onClicked: { settingsPopup.editingIndex = -1; settingsPopup.open = false; }
-          }
-        }
-      }
-
-      PanelSeparator { foreground: Color.foreground }
-
-      // ---- Display settings ----
-      PanelSectionHeader {
-        text: "DISPLAY MODE"
-        foreground: Color.foreground
-      }
-
-      ButtonGroup {
-        width: parent.width
-        spacing: Style.spacing.xs
-        options: [
-          { value: "auto", label: "Auto", tooltip: "Largest non-zero unit" },
-          { value: "years", label: "Years", tooltip: "Always years" },
-          { value: "months", label: "Months", tooltip: "Always months" },
-          { value: "days", label: "Days", tooltip: "Always days" },
-          { value: "hours", label: "Hours", tooltip: "Always hours" },
-          { value: "minutes", label: "Minutes", tooltip: "Always minutes" }
-        ]
-        value: root.currentDisplayMode
-        onChanged: function(val) { root.updateSetting("displayMode", val); }
-      }
-
-      PanelSectionHeader {
-        text: "ICON STYLE"
-        foreground: Color.foreground
-      }
-
-      ButtonGroup {
-        width: parent.width
-        spacing: Style.spacing.xs
-        options: [
-          { value: "rocket", label: "\uf135 Rocket", tooltip: "Nerd Font Rocket" },
-          { value: "hourglass", label: "\uf252 Hourglass", tooltip: "Nerd Font Hourglass" },
-          { value: "none", label: "Off", tooltip: "No Icon" }
-        ]
-        value: root.currentIconStyle
-        onChanged: function(val) { root.updateSetting("iconStyle", val); }
-      }
-
-      PanelSectionHeader {
-        text: "BADGE STYLE"
-        foreground: Color.foreground
-      }
-
-      ButtonGroup {
-        width: parent.width
-        spacing: Style.spacing.xs
-        options: [
-          { value: "flat", label: "Flat", tooltip: "Transparent background" },
-          { value: "pill", label: "Pill", tooltip: "Rounded capsule border" }
-        ]
-        value: root.currentBadgeStyle
-        onChanged: function(val) { root.updateSetting("badgeStyle", val); }
-      }
-
-      PanelSectionHeader {
-        text: "URGENT THRESHOLD (DAYS)"
-        foreground: Color.foreground
-      }
-
-      PanelSlider {
-        width: parent.width
-        minimum: 0
-        maximum: 30
-        step: 1
-        integer: true
-        value: root.currentUrgentThresholdDays
-        onReleased: root.updateSetting("urgentThresholdDays", value)
-      }
-
-      PanelSeparator { foreground: Color.foreground }
-
-      PanelSectionHeader {
-        text: "BAR POSITION"
-        foreground: Color.foreground
-      }
-
-      ButtonGroup {
-        width: parent.width
-        spacing: Style.spacing.xs
-        options: [
-          { value: "left", label: "Left", tooltip: "Left section" },
-          { value: "center", label: "Center", tooltip: "Center section" },
-          { value: "right", label: "Right", tooltip: "Right section" }
-        ]
-        value: root.currentBarSection
-        onChanged: function(val) { root.moveToSection(val); }
       }
     }
   }
