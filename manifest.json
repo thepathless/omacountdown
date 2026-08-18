@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "id": "suva.mimo-countdown",
-  "name": "Mimo Countdown",
-  "version": "2.0.0",
+  "id": "omacountdown",
+  "name": "OmaCountdown",
+  "version": "1.0.0",
   "author": "Suva",
-  "description": "Multiple named countdown timers displayed on your status bar.",
+  "description": "Elegant countdown timer to any custom date and time with configurable units (years, months, days, hours, minutes), quick presets, milestone notifications, and Omarchy aesthetics.",
   "kinds": [
     "bar-widget"
   ],
@@ -12,83 +12,149 @@
     "barWidget": "BarWidget.qml"
   },
   "barWidget": {
-    "displayName": "Mimo Countdown",
-    "description": "Multiple named countdown timers for your bar",
+    "displayName": "OmaCountdown",
+    "description": "Event countdown timer with customizable units and styling",
     "category": "Time",
     "allowMultiple": false,
     "defaultSection": "right",
     "defaults": {
-      "countdowns": [],
-      "selectedIndex": 0,
-      "displayMode": "auto",
-      "iconStyle": "nerd",
-      "customEmoji": "",
-      "showIcon": true,
+      "targetLabel": "Event",
+      "targetDate": "",
+      "targetTime": "00:00",
+      "format": "auto",
+      "showYears": true,
+      "showMonths": true,
+      "showDays": true,
+      "showHours": true,
+      "showMinutes": true,
+      "showLabel": true,
+      "iconStyle": "rocket",
       "badgeStyle": "flat",
-      "urgentThresholdDays": 7
+      "urgentThresholdDays": 7,
+      "showNotifications": true
     },
     "schema": [
       {
-        "key": "countdowns",
+        "key": "targetLabel",
         "type": "string",
-        "label": "Countdowns",
-        "defaultValue": "[]",
-        "description": "JSON array of countdowns. Each entry has name, date (YYYY-MM-DD), and time (HH:MM). Managed via the widget popup."
+        "label": "Event Title",
+        "defaultValue": "Event",
+        "description": "Title or label for the countdown event (e.g. 'Project Launch', 'New Year', 'Vacation')."
       },
       {
-        "key": "selectedIndex",
-        "type": "integer",
-        "label": "Selected Index",
-        "defaultValue": 0,
-        "description": "Which countdown to display on the bar (0-based index into the countdowns array)."
+        "key": "targetDate",
+        "type": "string",
+        "label": "Target Date (YYYY-MM-DD)",
+        "defaultValue": "",
+        "description": "Target date in YYYY-MM-DD format. If left empty, defaults to 7 days ahead."
       },
       {
-        "key": "displayMode",
+        "key": "targetTime",
+        "type": "string",
+        "label": "Target Time (HH:MM)",
+        "defaultValue": "00:00",
+        "description": "Target time of day in 24-hour HH:MM format."
+      },
+      {
+        "key": "format",
         "type": "enum",
-        "label": "Display Mode",
-        "options": ["auto", "years", "months", "days", "hours", "minutes"],
+        "label": "Display Format",
+        "options": [
+          "auto",
+          "full",
+          "compact",
+          "days_only",
+          "hours_only",
+          "percentage"
+        ],
         "defaultValue": "auto",
-        "description": "How to format the time remaining. Auto picks the largest unit."
+        "description": "Format on status bar: 'auto' (smart non-zero units), 'full' (all enabled units), 'compact' (top units), 'days_only' (total days), 'hours_only' (total hours), or 'percentage' (progress %)."
+      },
+      {
+        "key": "showYears",
+        "type": "boolean",
+        "label": "Show Years",
+        "defaultValue": true,
+        "description": "Include years in countdown calculations and display."
+      },
+      {
+        "key": "showMonths",
+        "type": "boolean",
+        "label": "Show Months",
+        "defaultValue": true,
+        "description": "Include months in countdown calculations and display."
+      },
+      {
+        "key": "showDays",
+        "type": "boolean",
+        "label": "Show Days",
+        "defaultValue": true,
+        "description": "Include days in countdown calculations and display."
+      },
+      {
+        "key": "showHours",
+        "type": "boolean",
+        "label": "Show Hours",
+        "defaultValue": true,
+        "description": "Include hours in countdown calculations and display."
+      },
+      {
+        "key": "showMinutes",
+        "type": "boolean",
+        "label": "Show Minutes",
+        "defaultValue": true,
+        "description": "Include minutes in countdown calculations and display."
+      },
+      {
+        "key": "showLabel",
+        "type": "boolean",
+        "label": "Show Event Title on Bar",
+        "defaultValue": true,
+        "description": "Display the event title before the countdown numbers on the status bar."
       },
       {
         "key": "iconStyle",
         "type": "enum",
         "label": "Icon Style",
-        "options": ["nerd", "hourglass", "custom", "none"],
-        "defaultValue": "nerd",
-        "description": "Prefix icon: 'nerd' (Nerd Font rocket), 'hourglass' (hourglass), 'custom' (any emoji), or 'none'."
-      },
-      {
-        "key": "customEmoji",
-        "type": "string",
-        "label": "Custom Emoji",
-        "defaultValue": "",
-        "description": "When iconStyle is 'custom', this emoji is shown on the bar."
-      },
-      {
-        "key": "showIcon",
-        "type": "boolean",
-        "label": "Show Icon",
-        "defaultValue": true,
-        "description": "Show or hide the icon on the bar."
+        "options": [
+          "rocket",
+          "hourglass",
+          "calendar",
+          "clock",
+          "sparkles",
+          "none"
+        ],
+        "defaultValue": "rocket",
+        "description": "Prefix icon: 'rocket' (🚀), 'hourglass' (⌛), 'calendar' (📅), 'clock' (󰥔), 'sparkles' (✨), or 'none'."
       },
       {
         "key": "badgeStyle",
         "type": "enum",
         "label": "Badge Style",
-        "options": ["flat", "pill"],
+        "options": [
+          "flat",
+          "pill",
+          "progress"
+        ],
         "defaultValue": "flat",
-        "description": "Background style on the bar."
+        "description": "'flat' transparent background, 'pill' rounded capsule border, 'progress' dynamic timeline completion fill."
       },
       {
         "key": "urgentThresholdDays",
         "type": "integer",
-        "label": "Urgent Threshold (days)",
+        "label": "Urgent Warning Threshold (Days)",
         "min": 0,
-        "max": 365,
+        "max": 30,
         "step": 1,
         "defaultValue": 7,
-        "description": "Highlight in urgent color when fewer days remain than this threshold."
+        "description": "Highlight widget in urgent theme color when remaining days are less than or equal to this threshold (0 to disable)."
+      },
+      {
+        "key": "showNotifications",
+        "type": "boolean",
+        "label": "Milestone Desktop Notifications",
+        "defaultValue": true,
+        "description": "Send desktop notification when reaching milestone checkpoints (30d, 7d, 1d, 1h, and completion)."
       }
     ]
   }

@@ -1,88 +1,54 @@
-# Mimo Countdown
+# OmaCountdown
 
-Multiple named countdown timer plugin for [Omarchy](https://omarchy.org/). Displays countdowns on your status bar.
+Customizable countdown timer plugin for [Omarchy](https://omarchy.org/). Displays countdowns with configurable unit granularity (years, months, days, hours, minutes), rich popup controls, and Omarchy aesthetics.
 
 ## Features
 
-- **Multiple Countdowns**: Add as many named countdowns as you want
-- **Quick Select**: Left-click to see all countdowns and pick which to display
-- **Cycle Through**: Middle-click or scroll to cycle through your countdowns
-- **Flexible Display**: Auto (largest unit) or force years/months/days/hours/minutes
-- **Urgent Warning**: Highlights when a countdown drops below threshold
-- **Bar Placement**: Move between left, center, right sections
-
-## Installation
-
-```bash
-omarchy plugin add ~/Projects/mimo-countdown --enable
-```
-
-Or manually:
-
-```bash
-cp -r ~/Projects/mimo-countdown ~/.config/omarchy/plugins/suva.mimo-countdown
-omarchy plugin enable suva.mimo-countdown
-```
+- **Granular Unit Selection**: Decide exactly which units to display (Years, Months, Days, Hours, Minutes).
+- **Flexible Formats**:
+  - `Auto` — Smart adaptive display showing most relevant units.
+  - `Full` — Shows all enabled units (e.g. `1y 2mo 15d 4h 30m`).
+  - `Compact` — Shows top 2 units (e.g. `1y 2mo`).
+  - `Days Only` — Displays total accumulated days (e.g. `441d`).
+  - `Progress %` — Dynamic completion percentage toward your goal.
+- **Quick Presets**: 1-click date setters (`+1D`, `+1W`, `+1M`, `+1Y`, `End of Month`, `End of Year`).
+- **Live Preview Hero Card**: Real-time counting display, event title, target timestamp, and progress bar fill.
+- **Native Omarchy Styling**: Flat, Pill, or Progress Pill badges matching the desktop theme.
+- **Customizable Icons**: 🚀 Rocket, ⌛ Hourglass, 📅 Calendar, 󰥔 Clock, ✨ Sparkles, or None.
+- **Urgent Alerts**: Highlights the widget when the event is within N days.
+- **Milestone Notifications**: Desktop alerts when crossing 30d, 7d, 1d, 1h checkpoints.
+- **Bar Positioning**: Move between left, center, and right sections directly from the popup.
 
 ## Controls
 
 | Action | Trigger | Description |
 |--------|---------|-------------|
-| Select Countdown | Left-Click | Open popup listing all countdowns |
-| Cycle Countdown | Middle-Click | Switch to next countdown |
-| Cycle Countdown | Mouse Wheel | Switch to next countdown |
-| Settings | Settings button | Add, edit, remove countdowns |
+| Open Configuration | **Left-Click** / **Right-Click** | Opens configuration and preview popup |
+| Cycle Display Format | **Middle-Click** | Cycles between Auto, Full, Compact, Days, % |
+| Cycle Display Format | **Mouse Wheel** | Scroll to cycle formats |
 
-## Configuration
+## Configuration via Popup
 
-### Via Widget Popup
-
-1. **Left-click** the widget to see all countdowns
-2. Click **Settings** to add/edit/remove countdowns
-3. Each countdown needs a name, date (YYYY-MM-DD), and optional time (HH:MM)
-
-### Via shell.json
-
-```json
-{
-  "id": "suva.mimo-countdown",
-  "countdowns": [
-    { "name": "Project Launch", "date": "2026-12-31", "time": "" },
-    { "name": "Birthday", "date": "2026-09-15", "time": "18:00" }
-  ],
-  "selectedIndex": 0,
-  "displayMode": "auto",
-  "iconStyle": "rocket",
-  "showIcon": true,
-  "badgeStyle": "flat",
-  "urgentThresholdDays": 7
-}
-```
-
-### Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `countdowns` | array | `[]` | List of countdown objects |
-| `selectedIndex` | integer | `0` | Which countdown to show on bar |
-| `displayMode` | enum | `"auto"` | `auto`, `years`, `months`, `days`, `hours`, `minutes` |
-| `iconStyle` | enum | `"rocket"` | `rocket`, `nerd`, `hourglass`, `none` |
-| `showIcon` | boolean | `true` | Show/hide prefix icon |
-| `badgeStyle` | enum | `"flat"` | `flat`, `pill` |
-| `urgentThresholdDays` | integer | `7` | Days threshold for urgent highlight |
+1. Click the widget on your bar.
+2. Edit **Event Title**, **Date** (`YYYY-MM-DD`), and **Time** (`HH:MM`), or click a preset button.
+3. Toggle which **Units** to show (Years, Months, Days, Hours, Minutes).
+4. Choose your preferred **Format**, **Icon**, and **Badge Style**.
 
 ## IPC Commands
 
 ```bash
-omarchy-shell suva.mimo-countdown refresh
-omarchy-shell suva.mimo-countdown selectNext
-omarchy-shell suva.mimo-countdown toggle
-omarchy-shell suva.mimo-countdown settings
+# Toggle popup
+omarchy-shell omacountdown toggle
+
+# Cycle format / icon / badge
+omarchy-shell omacountdown cycleFormat
+omarchy-shell omacountdown cycleIcon
+omarchy-shell omacountdown cycleBadge
+
+# Move bar section
+omarchy-shell omacountdown moveSection center
+
+# Send desktop notification summary
+omarchy-shell omacountdown notify
 ```
 
-## Removal
-
-```bash
-omarchy plugin disable suva.mimo-countdown
-omarchy plugin remove suva.mimo-countdown
-```
