@@ -30,11 +30,12 @@
       "showMinutes": true,
       "showLabel": true,
       "iconStyle": "medical",
-      "customEmoji": "\uf0f0",
+      "customEmoji": "\uf497",
       "badgeStyle": "flat",
       "gradientColor": true,
       "urgentThresholdDays": 7,
-      "showNotifications": true
+      "showNotifications": true,
+      "lastNotifiedThreshold": 101
     },
     "schema": [
       {
@@ -148,7 +149,7 @@
         "key": "customEmoji",
         "type": "string",
         "label": "Custom Glyph / Text",
-        "defaultValue": "\uf0f0",
+        "defaultValue": "\uf497",
         "description": "Custom Nerd Font glyph or text when iconStyle is 'custom'."
       },
       {
@@ -157,11 +158,12 @@
         "label": "Badge Style",
         "options": [
           "flat",
+          "flat_progress",
           "pill",
           "progress"
         ],
         "defaultValue": "flat",
-        "description": "'flat' transparent background, 'pill' rounded capsule border, 'progress' dynamic timeline completion fill."
+        "description": "'flat' minimal transparent, 'flat_progress' minimal flat with timeline progress fill, 'pill' capsule border, 'progress' pill with progress fill."
       },
       {
         "key": "gradientColor",

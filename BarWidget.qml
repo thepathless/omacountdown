@@ -23,11 +23,12 @@ BarWidget {
   readonly property bool showMinutes: setting("showMinutes", true)
   readonly property bool showLabel: setting("showLabel", true)
   readonly property string currentIconStyle: setting("iconStyle", "medical")
-  readonly property string customEmoji: setting("customEmoji", "\uf0f0")
+  readonly property string customEmoji: setting("customEmoji", "\uf497")
   readonly property string currentBadgeStyle: setting("badgeStyle", "flat")
   readonly property bool currentGradientColor: setting("gradientColor", true)
   readonly property int currentUrgentThresholdDays: setting("urgentThresholdDays", 7)
   readonly property bool currentShowNotifications: setting("showNotifications", true)
+  property int lastNotifiedThreshold: setting("lastNotifiedThreshold", 101)
 
   // Current bar section (left, center, right)
   readonly property string currentBarSection: {
@@ -62,7 +63,7 @@ BarWidget {
       return root.bar ? root.bar.urgent : Color.urgent
     }
     if (currentGradientColor && countdownStats) {
-      return Model.getProgressColor(countdownStats.ratioRemaining, countdownStats.isPast)
+      return Model.getProgressColor(countdownStats)
     }
     return root.bar ? root.bar.barForeground : Color.foreground
   }
@@ -92,15 +93,17 @@ BarWidget {
 
   function updateTime() {
     var newStats = Model.calculateCountdown(targetDate, targetTime, clock.date, startDate)
-    if (currentShowNotifications && prevCountdownStats !== null && newStats !== null) {
-      var milestone = Model.checkMilestone(prevCountdownStats, newStats, {
+    if (currentShowNotifications && newStats !== null && !newStats.isPast) {
+      var milestone = Model.checkMilestone(prevCountdownStats, newStats, lastNotifiedThreshold, {
         showYears: showYears,
         showMonths: showMonths,
         showDays: showDays,
         showHours: showHours,
         showMinutes: showMinutes
       })
-      if (milestone) {
+      if (milestone && milestone.threshold !== lastNotifiedThreshold) {
+        lastNotifiedThreshold = milestone.threshold
+        updateSetting("lastNotifiedThreshold", milestone.threshold)
         sendMilestoneNotification(milestone)
       }
     }
@@ -156,6 +159,8 @@ BarWidget {
     for (var k in root.settings) if (k !== "id") entry[k] = root.settings[k]
     entry["targetDate"] = dateStr
     entry["startDate"] = new Date().toISOString()
+    entry["lastNotifiedThreshold"] = 101
+    root.lastNotifiedThreshold = 101
     root.settings = entry
     if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === "function") {
       root.bar.shell.updateEntryInline(root.moduleName, entry)
@@ -208,7 +213,7 @@ BarWidget {
     if (notifyProc.running) return
     var prefix = root.activeIcon !== "" ? (root.activeIcon + " ") : ""
     var title = prefix + (targetLabel || "Countdown")
-    var body = "⏳ " + milestone.remainingText + " left until " + (targetLabel || "event") + "\n" +
+    var body = "⏳ " + milestone.remainingText + " remaining until " + (targetLabel || "event") + "\n" +
                "🎯 Target: " + (countdownStats ? (Model.formatDateISO(countdownStats.target) + " " + Model.formatTimeISO(countdownStats.target)) : "")
     notifyProc.command = [root.notifyScriptPath, title, body, isUrgentState ? "true" : "false"]
     notifyProc.running = true
@@ -281,13 +286,14 @@ BarWidget {
       visible: !root.vertical
       anchors.fill: parent
 
-      // Badge / Pill Background
+      // Badge / Pill / Flat Progress Background
       Rectangle {
         anchors.fill: parent
         anchors.margins: 2
-        visible: root.currentBadgeStyle === "pill" || root.currentBadgeStyle === "progress"
-        radius: height / 2
+        visible: root.currentBadgeStyle === "pill" || root.currentBadgeStyle === "progress" || root.currentBadgeStyle === "flat_progress"
+        radius: (root.currentBadgeStyle === "pill" || root.currentBadgeStyle === "progress") ? height / 2 : Style.cornerRadius
         color: {
+          if (root.currentBadgeStyle === "flat_progress") return "transparent"
           if (root.isUrgentState) {
             return root.bar ? Qt.rgba(root.bar.urgent.r, root.bar.urgent.g, root.bar.urgent.b, 0.20) : Qt.rgba(1, 0.35, 0.35, 0.20)
           }
@@ -296,8 +302,9 @@ BarWidget {
           }
           return root.bar ? Qt.rgba(root.bar.background.r, root.bar.background.g, root.bar.background.b, 0.25) : "transparent"
         }
-        border.width: 1
+        border.width: (root.currentBadgeStyle === "flat_progress") ? 0 : 1
         border.color: {
+          if (root.currentBadgeStyle === "flat_progress") return "transparent"
           if (root.currentGradientColor) {
             return Qt.rgba(root.dynamicColor.r, root.dynamicColor.g, root.dynamicColor.b, 0.35)
           }
@@ -307,9 +314,9 @@ BarWidget {
           return root.bar ? Qt.rgba(root.bar.barForeground.r, root.bar.barForeground.g, root.bar.barForeground.b, 0.15) : "transparent"
         }
 
-        // Dynamic Progress Fill for 'progress' badge style
+        // Dynamic Progress Fill for 'progress' and 'flat_progress' badge styles
         Rectangle {
-          visible: root.currentBadgeStyle === "progress" && root.countdownStats
+          visible: (root.currentBadgeStyle === "progress" || root.currentBadgeStyle === "flat_progress") && root.countdownStats
           anchors.left: parent.left
           anchors.top: parent.top
           anchors.bottom: parent.bottom
@@ -421,7 +428,7 @@ BarWidget {
         spacing: Style.spacing.sm
 
         Text {
-          text: root.activeIcon !== "" ? root.activeIcon : "\uf0f0"
+          text: root.activeIcon !== "" ? root.activeIcon : "\uf497"
           color: root.dynamicColor
           font.family: Style.font.family
           font.pixelSize: Style.font.title
@@ -750,7 +757,7 @@ BarWidget {
           width: parent.width
           spacing: Style.spacing.xs
           options: [
-            { value: "medical", label: "\uf0f0 Med", tooltip: "Medical / Doctor" },
+            { value: "medical", label: "\uf497 Med", tooltip: "Stethoscope / Medical" },
             { value: "clock", label: "\uf017 Clock", tooltip: "Clock timer" },
             { value: "hourglass", label: "\uf252 Glass", tooltip: "Hourglass" },
             { value: "calendar", label: "\uf073 Cal", tooltip: "Calendar event" }
@@ -825,7 +832,7 @@ BarWidget {
 
           TextField {
             width: parent.width - Style.space(55)
-            placeholderText: "Enter glyph (e.g. \\uf0f0 or text)"
+            placeholderText: "Enter glyph (e.g. \\uf497 or text)"
             text: root.customEmoji
             onTextChanged: root.updateSetting("customEmoji", text)
           }
@@ -841,8 +848,9 @@ BarWidget {
           spacing: Style.spacing.xs
           options: [
             { value: "flat", label: "Flat", tooltip: "Transparent minimal background" },
+            { value: "flat_progress", label: "Flat Bar", tooltip: "Minimal flat with dynamic timeline progress fill" },
             { value: "pill", label: "Pill", tooltip: "Subtle capsule border" },
-            { value: "progress", label: "Progress Pill", tooltip: "Dynamic background progress fill" }
+            { value: "progress", label: "Pill Bar", tooltip: "Capsule border with dynamic progress fill" }
           ]
           value: root.currentBadgeStyle
           onChanged: function(val) { root.updateSetting("badgeStyle", val) }

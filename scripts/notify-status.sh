@@ -16,8 +16,8 @@ if command -v notify-send >/dev/null 2>&1; then
     -a "OmaCountdown" \
     -u "$URGENCY_FLAG" \
     -h "string:x-canonical-private-synchronous:omacountdown" \
-    -i "preferences-system-time" \
     "$MSG_TITLE" \
     "$MSG_BODY" \
     -t 5000
 fi
+

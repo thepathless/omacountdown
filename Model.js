@@ -342,7 +342,7 @@ function formatDetailed(stats, settings) {
 function getIcon(iconStyle, customEmoji) {
   switch (iconStyle) {
     case "medical":
-      return "\uf0f0"; // nf-fa-user_md / stethoscope
+      return "\uf497"; // nf-fa-stethoscope (genuine stethoscope)
     case "clock":
       return "\uf017"; // nf-fa-clock_o
     case "hourglass":
@@ -364,29 +364,50 @@ function getIcon(iconStyle, customEmoji) {
     case "bolt":
       return "\uf0e7"; // nf-fa-bolt
     case "custom":
-      return (customEmoji && customEmoji.trim() !== "") ? customEmoji.trim() : "\uf0f0";
+      return (customEmoji && customEmoji.trim() !== "") ? customEmoji.trim() : "\uf497";
     case "none":
       return "";
     default:
-      return "\uf0f0";
+      return "\uf497";
   }
 }
 
 /**
- * Computes dynamic timeline gradient color from Green -> Yellow -> Orange -> Red
- * based on the percentage of time remaining (1.0 = 100% left to 0.0 = 0% left).
+ * Computes calibrated dynamic timeline gradient color from Green -> Yellow -> Orange -> Red.
+ * Correctly accounts for long-range events (e.g. 1 year away is 100% Pure Green)
+ * as well as short-range countdowns.
  */
-function getProgressColor(ratioRemaining, isPast) {
-  if (isPast) return "#ff5555"; // Red / Expired
+function getProgressColor(stats) {
+  if (!stats || stats.isPast) return "#ff5555"; // Red / Expired
 
-  var r = Math.min(1.0, Math.max(0.0, ratioRemaining));
+  var days = stats.totalDays !== undefined ? stats.totalDays : 0;
+  var hours = stats.totalHours !== undefined ? stats.totalHours : 0;
+  var ratioRem = stats.ratioRemaining !== undefined ? stats.ratioRemaining : 1.0;
 
-  // 4-stop gradient:
-  // 1.0 -> Lush Green (rgb: 80, 250, 123)
-  // 0.6 -> Warm Gold / Yellow (rgb: 241, 250, 140)
-  // 0.25 -> Coral / Orange (rgb: 255, 184, 108)
-  // 0.0 -> Crimson / Red (rgb: 255, 85, 85)
+  // Calibrated ratio based on horizon and relative duration
+  var r = 1.0;
+  if (days >= 60) {
+    r = 1.0; // 100% Pure Green (events > 2 months away)
+  } else if (days >= 21) {
+    // 60d to 21d: Green (1.0) down to Lime (0.70)
+    r = 0.70 + (0.30 * (days - 21) / 39.0);
+  } else if (days >= 7) {
+    // 21d to 7d: Lime (0.70) down to Warm Yellow (0.40)
+    r = 0.40 + (0.30 * (days - 7) / 14.0);
+  } else if (days >= 2) {
+    // 7d to 2d: Warm Yellow (0.40) down to Vivid Orange (0.15)
+    r = 0.15 + (0.25 * (days - 2) / 5.0);
+  } else {
+    // < 2 days (48h down to 0): Vivid Orange (0.15) down to Crimson Red (0.0)
+    r = Math.max(0.0, 0.15 * (hours / 48.0));
+  }
 
+  // If user configured a specific start date with higher relative remaining ratio, respect it
+  if (ratioRem > r) {
+    r = ratioRem;
+  }
+
+  // 4-stop smooth RGB color interpolation
   var red = 0;
   var green = 0;
   var blue = 0;
@@ -535,26 +556,26 @@ function nextIconStyle(current) {
  * Cycles to the next available badge style.
  */
 function nextBadgeStyle(current) {
-  var styles = ["flat", "pill", "progress"];
+  var styles = ["flat", "flat_progress", "pill", "progress"];
   var idx = styles.indexOf(current);
   if (idx === -1) return styles[0];
   return styles[(idx + 1) % styles.length];
 }
 
 /**
- * Checks percentage milestone crossings (100%, 90%, 80%, ..., 10%, 0%).
- * Note: Notification text contains ONLY the remaining time amount, NO percentage symbol!
+ * Checks percentage milestone crossings (90%, 80%, ..., 10%, 0%).
+ * Strictly triggers ONCE per threshold by checking against lastNotifiedThreshold!
  */
-function checkMilestone(prevStats, currentStats, settings) {
-  if (!prevStats || !currentStats || currentStats.isPast) return null;
+function checkMilestone(prevStats, currentStats, lastNotifiedThreshold, settings) {
+  if (!currentStats || currentStats.isPast) return null;
 
   var thresholds = [90, 80, 70, 60, 50, 40, 30, 20, 10, 0];
-  var prevPct = prevStats.percentRemaining;
   var currPct = currentStats.percentRemaining;
+  var lastThreshold = (typeof lastNotifiedThreshold === "number") ? lastNotifiedThreshold : 101;
 
   for (var i = 0; i < thresholds.length; i++) {
     var t = thresholds[i];
-    if (prevPct > t && currPct <= t) {
+    if (lastThreshold > t && currPct <= t) {
       var remainingFormatted = formatBarText(currentStats, {
         showYears: settings ? settings.showYears : true,
         showMonths: settings ? settings.showMonths : true,
