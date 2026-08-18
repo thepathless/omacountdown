@@ -42,9 +42,9 @@ function parseTargetDate(targetDateStr, targetTimeStr, now) {
 
 /**
  * Calendar-aware countdown calculation.
- * Returns breakdown in years, months, days, hours, minutes, seconds.
+ * Accurately calculates standard breakdown and total accumulated units.
  */
-function calculateCountdown(targetDateStr, targetTimeStr, now) {
+function calculateCountdown(targetDateStr, targetTimeStr, now, startDateStr) {
   var current = now instanceof Date ? now : new Date();
   var target = parseTargetDate(targetDateStr, targetTimeStr, current);
 
@@ -123,17 +123,31 @@ function calculateCountdown(targetDateStr, targetTimeStr, now) {
 
   var seconds = Math.floor((end.getTime() - temp.getTime()) / 1000);
 
-  // Progress computation (relative to a sensible time horizon or year start)
-  var yearStart = new Date(current.getFullYear(), 0, 1, 0, 0, 0);
-  var totalSpan = Math.max(1, target.getTime() - yearStart.getTime());
-  var elapsedSpan = Math.max(0, current.getTime() - yearStart.getTime());
-  var ratioElapsed = Math.min(1.0, Math.max(0.0, elapsedSpan / totalSpan));
-  var percentElapsedNum = ratioElapsed * 100;
-  var percentStr = percentElapsedNum.toFixed(0) + "%";
+  // Total baseline duration for percentage milestones (from startDate to target)
+  var baselineDate = null;
+  if (startDateStr && startDateStr.trim() !== "") {
+    var parsedStart = new Date(startDateStr);
+    if (!isNaN(parsedStart.getTime()) && parsedStart < target) {
+      baselineDate = parsedStart;
+    }
+  }
+  if (!baselineDate) {
+    // Default baseline: Jan 1 of current year or 30 days prior
+    var yearStart = new Date(current.getFullYear(), 0, 1, 0, 0, 0);
+    baselineDate = (yearStart < target) ? yearStart : new Date(target.getTime() - 30 * 86400000);
+  }
+
+  var totalSpan = Math.max(1000, target.getTime() - baselineDate.getTime());
+  var remainingSpan = isPast ? 0 : Math.max(0, target.getTime() - current.getTime());
+  var ratioRemaining = Math.min(1.0, Math.max(0.0, remainingSpan / totalSpan));
+  var percentRemaining = ratioRemaining * 100;
+  var ratioElapsed = Math.min(1.0, Math.max(0.0, 1.0 - ratioRemaining));
+  var percentElapsed = ratioElapsed * 100;
 
   return {
     target: target,
     current: current,
+    baselineDate: baselineDate,
     years: years,
     months: months,
     days: days,
@@ -147,8 +161,97 @@ function calculateCountdown(targetDateStr, targetTimeStr, now) {
     totalMs: totalMs,
     isPast: isPast,
     isExpired: isExpired,
+    ratioRemaining: ratioRemaining,
     ratioElapsed: ratioElapsed,
-    percentStr: percentStr
+    percentRemaining: percentRemaining,
+    percentElapsed: percentElapsed,
+    percentStr: percentElapsed.toFixed(0) + "%"
+  };
+}
+
+/**
+ * Computes active units dynamically according to which units are enabled.
+ * If Years or Months are disabled, their values roll over into Days/Hours/Minutes!
+ */
+function getActiveUnitValues(stats, settings) {
+  if (!stats) return { years: 0, months: 0, days: 0, hours: 0, minutes: 0, seconds: 0 };
+
+  var showY = settings ? settings.showYears !== false : true;
+  var showM = settings ? settings.showMonths !== false : true;
+  var showD = settings ? settings.showDays !== false : true;
+  var showH = settings ? settings.showHours !== false : true;
+  var showMin = settings ? settings.showMinutes !== false : true;
+
+  var current = stats.current;
+  var target = stats.target;
+  var start = stats.isPast ? target : current;
+  var end = stats.isPast ? current : target;
+  var temp = new Date(start.getTime());
+
+  var years = 0;
+  if (showY) {
+    while (true) {
+      var nextY = new Date(temp.getFullYear() + 1, temp.getMonth(), temp.getDate(), temp.getHours(), temp.getMinutes(), temp.getSeconds());
+      if (nextY <= end) {
+        years++;
+        temp = nextY;
+      } else break;
+    }
+  }
+
+  var months = 0;
+  if (showM) {
+    while (true) {
+      var nextM = new Date(temp.getFullYear(), temp.getMonth() + 1, temp.getDate(), temp.getHours(), temp.getMinutes(), temp.getSeconds());
+      if (nextM <= end) {
+        months++;
+        temp = nextM;
+      } else break;
+    }
+  }
+
+  var days = 0;
+  if (showD) {
+    while (true) {
+      var nextD = new Date(temp.getFullYear(), temp.getMonth(), temp.getDate() + 1, temp.getHours(), temp.getMinutes(), temp.getSeconds());
+      if (nextD <= end) {
+        days++;
+        temp = nextD;
+      } else break;
+    }
+  }
+
+  var hours = 0;
+  if (showH) {
+    while (true) {
+      var nextH = new Date(temp.getFullYear(), temp.getMonth(), temp.getDate(), temp.getHours() + 1, temp.getMinutes(), temp.getSeconds());
+      if (nextH <= end) {
+        hours++;
+        temp = nextH;
+      } else break;
+    }
+  }
+
+  var minutes = 0;
+  if (showMin) {
+    while (true) {
+      var nextMin = new Date(temp.getFullYear(), temp.getMonth(), temp.getDate(), temp.getHours(), temp.getMinutes() + 1, temp.getSeconds());
+      if (nextMin <= end) {
+        minutes++;
+        temp = nextMin;
+      } else break;
+    }
+  }
+
+  var seconds = Math.floor((end.getTime() - temp.getTime()) / 1000);
+
+  return {
+    years: years,
+    months: months,
+    days: days,
+    hours: hours,
+    minutes: minutes,
+    seconds: seconds
   };
 }
 
@@ -158,14 +261,14 @@ function calculateCountdown(targetDateStr, targetTimeStr, now) {
 function formatBarText(stats, settings) {
   if (!stats) return settings && settings.targetLabel ? settings.targetLabel : "Countdown";
 
-  var showY = settings.showYears !== false;
-  var showM = settings.showMonths !== false;
-  var showD = settings.showDays !== false;
-  var showH = settings.showHours !== false;
-  var showMin = settings.showMinutes !== false;
-  var showLbl = settings.showLabel !== false;
-  var label = (showLbl && settings.targetLabel && settings.targetLabel.trim() !== "") ? settings.targetLabel.trim() : "";
-  var format = settings.format || "auto";
+  var showY = settings ? settings.showYears !== false : true;
+  var showM = settings ? settings.showMonths !== false : true;
+  var showD = settings ? settings.showDays !== false : true;
+  var showH = settings ? settings.showHours !== false : true;
+  var showMin = settings ? settings.showMinutes !== false : true;
+  var showLbl = settings ? settings.showLabel !== false : true;
+  var label = (showLbl && settings && settings.targetLabel && settings.targetLabel.trim() !== "") ? settings.targetLabel.trim() : "";
+  var format = settings && settings.format ? settings.format : "auto";
 
   if (format === "percentage") {
     return (label !== "" ? label + " " : "") + (stats.isPast ? "100%" : stats.percentStr);
@@ -183,17 +286,19 @@ function formatBarText(stats, settings) {
     return (label !== "" ? label + " " : "") + hStr;
   }
 
+  var units = getActiveUnitValues(stats, settings);
   var parts = [];
-  if (showY && stats.years > 0) parts.push(stats.years + "y");
-  if (showM && stats.months > 0) parts.push(stats.months + "mo");
-  if (showD && stats.days > 0) parts.push(stats.days + "d");
-  if (showH && stats.hours > 0) parts.push(stats.hours + "h");
-  if (showMin && stats.minutes > 0) parts.push(stats.minutes + "m");
+
+  if (showY && units.years > 0) parts.push(units.years + "y");
+  if (showM && units.months > 0) parts.push(units.months + "mo");
+  if (showD && units.days > 0) parts.push(units.days + "d");
+  if (showH && units.hours > 0) parts.push(units.hours + "h");
+  if (showMin && units.minutes > 0) parts.push(units.minutes + "m");
 
   if (parts.length === 0) {
-    if (showMin) parts.push(stats.minutes + "m");
-    else if (showH) parts.push(stats.hours + "h");
-    else if (showD) parts.push(stats.days + "d");
+    if (showMin) parts.push(units.minutes + "m");
+    else if (showH) parts.push(units.hours + "h");
+    else if (showD) parts.push(units.days + "d");
     else parts.push("0m");
   }
 
@@ -215,27 +320,29 @@ function formatBarText(stats, settings) {
 }
 
 /**
- * Formats full detailed breakdown string (for hero card & tooltips).
+ * Formats full detailed breakdown string (respects active units or full breakdown).
  */
-function formatDetailed(stats) {
+function formatDetailed(stats, settings) {
   if (!stats) return "No target date set";
+  var units = getActiveUnitValues(stats, settings || { showYears: true, showMonths: true, showDays: true, showHours: true, showMinutes: true });
   var parts = [];
-  if (stats.years > 0) parts.push(stats.years + "y");
-  if (stats.months > 0) parts.push(stats.months + "mo");
-  if (stats.days > 0) parts.push(stats.days + "d");
-  if (stats.hours > 0) parts.push(stats.hours + "h");
-  if (stats.minutes > 0) parts.push(stats.minutes + "m");
-  if (stats.seconds > 0 || parts.length === 0) parts.push(stats.seconds + "s");
+  if (units.years > 0) parts.push(units.years + "y");
+  if (units.months > 0) parts.push(units.months + "mo");
+  if (units.days > 0) parts.push(units.days + "d");
+  if (units.hours > 0) parts.push(units.hours + "h");
+  if (units.minutes > 0) parts.push(units.minutes + "m");
+  if (units.seconds > 0 || parts.length === 0) parts.push(units.seconds + "s");
   return parts.join(" ") + (stats.isPast ? " ago" : "");
 }
 
 /**
  * Returns icon character / glyph.
+ * Supports custom user emoji, standard Nerd Font glyphs, or presets.
  */
-function getIcon(iconStyle) {
+function getIcon(iconStyle, customEmoji) {
   switch (iconStyle) {
-    case "rocket":
-      return "🚀";
+    case "custom":
+      return (customEmoji && customEmoji.trim() !== "") ? customEmoji.trim() : "🎯";
     case "hourglass":
       return "⌛";
     case "calendar":
@@ -247,7 +354,7 @@ function getIcon(iconStyle) {
     case "none":
       return "";
     default:
-      return "🚀";
+      return (customEmoji && customEmoji.trim() !== "") ? customEmoji.trim() : "🎯";
   }
 }
 
@@ -358,7 +465,7 @@ function nextFormat(current) {
  * Cycles to the next available icon style.
  */
 function nextIconStyle(current) {
-  var styles = ["rocket", "hourglass", "calendar", "clock", "sparkles", "none"];
+  var styles = ["custom", "hourglass", "calendar", "clock", "sparkles", "none"];
   var idx = styles.indexOf(current);
   if (idx === -1) return styles[0];
   return styles[(idx + 1) % styles.length];
@@ -375,28 +482,37 @@ function nextBadgeStyle(current) {
 }
 
 /**
- * Checks milestone crossings for desktop notifications.
+ * Checks percentage milestone crossings (100%, 90%, 80%, ..., 10%, 0%).
+ * Note: Notification text contains ONLY the remaining time amount, NO percentage symbol!
  */
-function checkMilestone(prevStats, currentStats) {
+function checkMilestone(prevStats, currentStats, settings) {
   if (!prevStats || !currentStats || currentStats.isPast) return null;
 
-  var milestones = [
-    { totalMins: 30 * 24 * 60, label: "30 days remaining!" },
-    { totalMins: 7 * 24 * 60,  label: "1 week remaining!" },
-    { totalMins: 3 * 24 * 60,  label: "3 days remaining!" },
-    { totalMins: 24 * 60,      label: "1 day remaining (24 hours left)!" },
-    { totalMins: 12 * 60,      label: "12 hours remaining!" },
-    { totalMins: 60,           label: "Final hour remaining (60 minutes left)!" },
-    { totalMins: 15,           label: "15 minutes left until event!" }
-  ];
+  var thresholds = [90, 80, 70, 60, 50, 40, 30, 20, 10, 0];
+  var prevPct = prevStats.percentRemaining;
+  var currPct = currentStats.percentRemaining;
 
-  for (var i = 0; i < milestones.length; i++) {
-    var m = milestones[i];
-    if (prevStats.totalMinutes > m.totalMins && currentStats.totalMinutes <= m.totalMins) {
-      return m;
+  for (var i = 0; i < thresholds.length; i++) {
+    var t = thresholds[i];
+    if (prevPct > t && currPct <= t) {
+      var remainingFormatted = formatBarText(currentStats, {
+        showYears: settings ? settings.showYears : true,
+        showMonths: settings ? settings.showMonths : true,
+        showDays: settings ? settings.showDays : true,
+        showHours: settings ? settings.showHours : true,
+        showMinutes: settings ? settings.showMinutes : true,
+        format: "full",
+        showLabel: false
+      });
+
+      return {
+        threshold: t,
+        remainingText: remainingFormatted
+      };
     }
   }
 
   return null;
 }
+
 

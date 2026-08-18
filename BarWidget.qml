@@ -14,6 +14,7 @@ BarWidget {
   readonly property string targetLabel: setting("targetLabel", "Event")
   readonly property string targetDate: setting("targetDate", "")
   readonly property string targetTime: setting("targetTime", "00:00")
+  readonly property string startDate: setting("startDate", "")
   readonly property string currentFormat: setting("format", "auto")
   readonly property bool showYears: setting("showYears", true)
   readonly property bool showMonths: setting("showMonths", true)
@@ -21,7 +22,8 @@ BarWidget {
   readonly property bool showHours: setting("showHours", true)
   readonly property bool showMinutes: setting("showMinutes", true)
   readonly property bool showLabel: setting("showLabel", true)
-  readonly property string currentIconStyle: setting("iconStyle", "rocket")
+  readonly property string currentIconStyle: setting("iconStyle", "custom")
+  readonly property string customEmoji: setting("customEmoji", "🎯")
   readonly property string currentBadgeStyle: setting("badgeStyle", "flat")
   readonly property int currentUrgentThresholdDays: setting("urgentThresholdDays", 7)
   readonly property bool currentShowNotifications: setting("showNotifications", true)
@@ -46,12 +48,12 @@ BarWidget {
   }
 
   // Live countdown stats calculation
-  property var countdownStats: Model.calculateCountdown(targetDate, targetTime, clock.date)
+  property var countdownStats: Model.calculateCountdown(targetDate, targetTime, clock.date, startDate)
   property var prevCountdownStats: null
   property real lastWheelTime: 0
 
   readonly property bool isUrgentState: Model.isUrgent(countdownStats, currentUrgentThresholdDays)
-  readonly property string activeIcon: Model.getIcon(currentIconStyle)
+  readonly property string activeIcon: Model.getIcon(currentIconStyle, customEmoji)
   readonly property string activeText: Model.formatBarText(countdownStats, {
     format: currentFormat,
     showYears: showYears,
@@ -67,18 +69,24 @@ BarWidget {
   readonly property string notifyScriptPath: Qt.resolvedUrl("scripts/notify-status.sh").toString().replace(/^file:\/\//, "")
 
   readonly property string tooltipInfo: "OmaCountdown • " + (targetLabel || "Event") + "\n" +
-    (countdownStats ? ("⏳ Remaining: " + Model.formatDetailed(countdownStats) + "\n" +
+    (countdownStats ? ("⏳ Remaining: " + Model.formatDetailed(countdownStats, { showYears: showYears, showMonths: showMonths, showDays: showDays, showHours: showHours, showMinutes: showMinutes }) + "\n" +
      "🎯 Target: " + Model.formatDateISO(countdownStats.target) + " " + Model.formatTimeISO(countdownStats.target) + "\n" +
-     "📊 Progress: " + (countdownStats.isPast ? "Completed" : countdownStats.percentStr) + "\n") : "No target date set\n") +
+     "📊 Status: " + (countdownStats.isPast ? "Completed" : "In Progress") + "\n") : "No target date set\n") +
     "──────────────────────────\n" +
     "• Left-click: Settings & Controls\n" +
     "• Middle-click: Cycle Format (" + currentFormat + ")\n" +
     "• Right-click: Settings & Controls"
 
   function updateTime() {
-    var newStats = Model.calculateCountdown(targetDate, targetTime, clock.date)
+    var newStats = Model.calculateCountdown(targetDate, targetTime, clock.date, startDate)
     if (currentShowNotifications && prevCountdownStats !== null && newStats !== null) {
-      var milestone = Model.checkMilestone(prevCountdownStats, newStats)
+      var milestone = Model.checkMilestone(prevCountdownStats, newStats, {
+        showYears: showYears,
+        showMonths: showMonths,
+        showDays: showDays,
+        showHours: showHours,
+        showMinutes: showMinutes
+      })
       if (milestone) {
         sendMilestoneNotification(milestone)
       }
@@ -130,9 +138,20 @@ BarWidget {
     }
   }
 
+  function setTargetDate(dateStr) {
+    var entry = { id: root.moduleName }
+    for (var k in root.settings) if (k !== "id") entry[k] = root.settings[k]
+    entry["targetDate"] = dateStr
+    entry["startDate"] = new Date().toISOString()
+    root.settings = entry
+    if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === "function") {
+      root.bar.shell.updateEntryInline(root.moduleName, entry)
+    }
+  }
+
   function applyPreset(presetType) {
     var pDate = Model.getPresetDate(presetType, clock.date)
-    updateSetting("targetDate", pDate)
+    setTargetDate(pDate)
   }
 
   function moveToSection(targetSection) {
@@ -174,20 +193,29 @@ BarWidget {
 
   function sendMilestoneNotification(milestone) {
     if (notifyProc.running) return
-    var title = "OmaCountdown • " + (targetLabel || "Event")
-    var body = milestone.label + "\n" +
-               "⏳ " + (countdownStats ? Model.formatDetailed(countdownStats) : "") + "\n" +
-               "🎯 Target: " + (countdownStats ? Model.formatDateISO(countdownStats.target) : "")
+    var prefix = root.activeIcon !== "" ? (root.activeIcon + " ") : ""
+    var title = prefix + (targetLabel || "Countdown")
+    var body = "⏳ " + milestone.remainingText + " left until " + (targetLabel || "event") + "\n" +
+               "🎯 Target: " + (countdownStats ? (Model.formatDateISO(countdownStats.target) + " " + Model.formatTimeISO(countdownStats.target)) : "")
     notifyProc.command = [root.notifyScriptPath, title, body, isUrgentState ? "true" : "false"]
     notifyProc.running = true
   }
 
   function sendStatusNotification() {
     if (notifyProc.running) return
-    var title = "OmaCountdown • " + (targetLabel || "Event")
-    var body = "⏳ Remaining: " + (countdownStats ? Model.formatDetailed(countdownStats) : "No target date") + "\n" +
-               "🎯 Target: " + (countdownStats ? (Model.formatDateISO(countdownStats.target) + " " + Model.formatTimeISO(countdownStats.target)) : "Not set") + "\n" +
-               "📊 Progress: " + (countdownStats ? (countdownStats.isPast ? "Completed" : countdownStats.percentStr) : "—")
+    var prefix = root.activeIcon !== "" ? (root.activeIcon + " ") : ""
+    var title = prefix + (targetLabel || "Countdown")
+    var rem = countdownStats ? Model.formatBarText(countdownStats, {
+      showYears: showYears,
+      showMonths: showMonths,
+      showDays: showDays,
+      showHours: showHours,
+      showMinutes: showMinutes,
+      format: "full",
+      showLabel: false
+    }) : "No target date"
+    var body = "⏳ " + rem + " remaining\n" +
+               "🎯 Target: " + (countdownStats ? (Model.formatDateISO(countdownStats.target) + " " + Model.formatTimeISO(countdownStats.target)) : "Not set")
     notifyProc.command = [root.notifyScriptPath, title, body, isUrgentState ? "true" : "false"]
     notifyProc.running = true
   }
@@ -381,7 +409,7 @@ BarWidget {
         spacing: Style.spacing.sm
 
         Text {
-          text: "🚀"
+          text: root.activeIcon !== "" ? root.activeIcon : "⏳"
           font.family: Style.font.family
           font.pixelSize: Style.font.title
           anchors.verticalCenter: parent.verticalCenter
@@ -464,7 +492,13 @@ BarWidget {
           }
 
           Text {
-            text: root.countdownStats ? Model.formatDetailed(root.countdownStats) : "Set target date below"
+            text: root.countdownStats ? Model.formatDetailed(root.countdownStats, {
+              showYears: root.showYears,
+              showMonths: root.showMonths,
+              showDays: root.showDays,
+              showHours: root.showHours,
+              showMinutes: root.showMinutes
+            }) : "Set target date below"
             color: Color.foreground
             font.family: Style.font.family
             font.pixelSize: Style.font.subtitle
@@ -517,7 +551,7 @@ BarWidget {
 
           TextField {
             width: parent.width - Style.space(55)
-            placeholderText: "e.g. Project Launch, New Year"
+            placeholderText: "e.g. NEET PG, Project Launch"
             text: root.targetLabel
             onTextChanged: root.updateSetting("targetLabel", text)
           }
@@ -543,7 +577,7 @@ BarWidget {
             text: root.targetDate
             onTextChanged: {
               if (Model.isValidDate(text) || text === "") {
-                root.updateSetting("targetDate", text)
+                root.setTargetDate(text)
               }
             }
           }
@@ -691,46 +725,85 @@ BarWidget {
       }
 
       // -----------------------------------------------------------
-      // Appearance & Icons
+      // Appearance & Icons (2-Row Layout + Custom Emoji Input)
       // -----------------------------------------------------------
       PanelSectionHeader {
         text: "ICON & BADGE STYLE"
         foreground: Color.foreground
       }
 
-      ButtonGroup {
+      Column {
         width: parent.width
         spacing: Style.spacing.xs
-        options: [
-          { value: "rocket", label: "🚀 Rocket", tooltip: "Rocket icon" },
-          { value: "hourglass", label: "⌛ Glass", tooltip: "Hourglass icon" },
-          { value: "calendar", label: "📅 Cal", tooltip: "Calendar icon" },
-          { value: "clock", label: "\uf017 Clock", tooltip: "Clock icon" },
-          { value: "sparkles", label: "✨ Star", tooltip: "Sparkles icon" },
-          { value: "none", label: "Off", tooltip: "No icon" }
-        ]
-        value: root.currentIconStyle
-        onChanged: function(val) { root.updateSetting("iconStyle", val) }
-      }
 
-      ButtonGroup {
-        width: parent.width
-        spacing: Style.spacing.xs
-        options: [
-          { value: "flat", label: "Flat", tooltip: "Transparent minimal background" },
-          { value: "pill", label: "Pill", tooltip: "Subtle capsule border" },
-          { value: "progress", label: "Progress Pill", tooltip: "Dynamic background progress fill" }
-        ]
-        value: root.currentBadgeStyle
-        onChanged: function(val) { root.updateSetting("badgeStyle", val) }
-      }
+        // Icon Row 1
+        ButtonGroup {
+          width: parent.width
+          spacing: Style.spacing.xs
+          options: [
+            { value: "custom", label: "Custom", tooltip: "Use custom emoji below" },
+            { value: "hourglass", label: "⌛ Glass", tooltip: "Hourglass icon" },
+            { value: "calendar", label: "📅 Cal", tooltip: "Calendar icon" }
+          ]
+          value: (root.currentIconStyle === "custom" || root.currentIconStyle === "hourglass" || root.currentIconStyle === "calendar") ? root.currentIconStyle : ""
+          onChanged: function(val) { root.updateSetting("iconStyle", val) }
+        }
 
-      Toggle {
-        width: parent.width
-        label: "Show Title on Bar"
-        description: "Prefix counter with event title"
-        checked: root.showLabel
-        onClicked: root.updateSetting("showLabel", !root.showLabel)
+        // Icon Row 2
+        ButtonGroup {
+          width: parent.width
+          spacing: Style.spacing.xs
+          options: [
+            { value: "clock", label: "\uf017 Clock", tooltip: "Nerd Font Clock" },
+            { value: "sparkles", label: "✨ Star", tooltip: "Sparkles icon" },
+            { value: "none", label: "Off", tooltip: "No icon" }
+          ]
+          value: (root.currentIconStyle === "clock" || root.currentIconStyle === "sparkles" || root.currentIconStyle === "none") ? root.currentIconStyle : ""
+          onChanged: function(val) { root.updateSetting("iconStyle", val) }
+        }
+
+        // Custom Emoji Input
+        Row {
+          width: parent.width
+          spacing: Style.spacing.sm
+          visible: root.currentIconStyle === "custom"
+
+          Text {
+            text: "Emoji:"
+            color: Color.foreground
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+            width: Style.space(45)
+            anchors.verticalCenter: parent.verticalCenter
+          }
+
+          TextField {
+            width: parent.width - Style.space(55)
+            placeholderText: "Type or paste any emoji (e.g. 🎯, 🩺, ✈️, 🎓, 💍)"
+            text: root.customEmoji
+            onTextChanged: root.updateSetting("customEmoji", text)
+          }
+        }
+
+        ButtonGroup {
+          width: parent.width
+          spacing: Style.spacing.xs
+          options: [
+            { value: "flat", label: "Flat", tooltip: "Transparent minimal background" },
+            { value: "pill", label: "Pill", tooltip: "Subtle capsule border" },
+            { value: "progress", label: "Progress Pill", tooltip: "Dynamic background progress fill" }
+          ]
+          value: root.currentBadgeStyle
+          onChanged: function(val) { root.updateSetting("badgeStyle", val) }
+        }
+
+        Toggle {
+          width: parent.width
+          label: "Show Title on Bar"
+          description: "Prefix counter with event title"
+          checked: root.showLabel
+          onClicked: root.updateSetting("showLabel", !root.showLabel)
+        }
       }
 
       // -----------------------------------------------------------
@@ -768,7 +841,7 @@ BarWidget {
         Toggle {
           width: parent.width
           label: "Milestone Notifications"
-          description: "Alert on crossing 30d, 7d, 1d, 1h, and event start"
+          description: "Alert on crossing 90%, 80%, 70%, ..., 10% remaining"
           checked: root.currentShowNotifications
           onClicked: root.updateSetting("showNotifications", !root.currentShowNotifications)
         }

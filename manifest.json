@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "id": "omacountdown",
   "name": "OmaCountdown",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "Suva",
-  "description": "Elegant countdown timer to any custom date and time with configurable units (years, months, days, hours, minutes), quick presets, milestone notifications, and Omarchy aesthetics.",
+  "description": "Elegant countdown timer to any custom date and time with configurable units (years, months, days, hours, minutes), custom emoji, percentage milestone notifications, and Omarchy aesthetics.",
   "kinds": [
     "bar-widget"
   ],
@@ -21,6 +21,7 @@
       "targetLabel": "Event",
       "targetDate": "",
       "targetTime": "00:00",
+      "startDate": "",
       "format": "auto",
       "showYears": true,
       "showMonths": true,
@@ -28,7 +29,8 @@
       "showHours": true,
       "showMinutes": true,
       "showLabel": true,
-      "iconStyle": "rocket",
+      "iconStyle": "custom",
+      "customEmoji": "🎯",
       "badgeStyle": "flat",
       "urgentThresholdDays": 7,
       "showNotifications": true
@@ -39,7 +41,7 @@
         "type": "string",
         "label": "Event Title",
         "defaultValue": "Event",
-        "description": "Title or label for the countdown event (e.g. 'Project Launch', 'New Year', 'Vacation')."
+        "description": "Title or label for the countdown event (e.g. 'NEET PG', 'Project Launch', 'Vacation')."
       },
       {
         "key": "targetDate",
@@ -54,6 +56,13 @@
         "label": "Target Time (HH:MM)",
         "defaultValue": "00:00",
         "description": "Target time of day in 24-hour HH:MM format."
+      },
+      {
+        "key": "startDate",
+        "type": "string",
+        "label": "Start Date",
+        "defaultValue": "",
+        "description": "Timestamp when countdown was started, used for 100% to 10% milestone notifications."
       },
       {
         "key": "format",
@@ -117,15 +126,22 @@
         "type": "enum",
         "label": "Icon Style",
         "options": [
-          "rocket",
+          "custom",
           "hourglass",
           "calendar",
           "clock",
           "sparkles",
           "none"
         ],
-        "defaultValue": "rocket",
-        "description": "Prefix icon: 'rocket' (🚀), 'hourglass' (⌛), 'calendar' (📅), 'clock' (󰥔), 'sparkles' (✨), or 'none'."
+        "defaultValue": "custom",
+        "description": "Prefix icon style: 'custom' (user custom emoji), 'hourglass' (⌛), 'calendar' (📅), 'clock' (󰥔), 'sparkles' (✨), or 'none'."
+      },
+      {
+        "key": "customEmoji",
+        "type": "string",
+        "label": "Custom Emoji",
+        "defaultValue": "🎯",
+        "description": "Custom emoji or text displayed when iconStyle is 'custom' (e.g. 🎯, 🩺, ✈️, 🎓, 💍)."
       },
       {
         "key": "badgeStyle",
@@ -154,7 +170,7 @@
         "type": "boolean",
         "label": "Milestone Desktop Notifications",
         "defaultValue": true,
-        "description": "Send desktop notification when reaching milestone checkpoints (30d, 7d, 1d, 1h, and completion)."
+        "description": "Send desktop notification when reaching milestone checkpoints (90%, 80%, 70%, 60%, 50%, 40%, 30%, 20%, 10% remaining)."
       }
     ]
   }
