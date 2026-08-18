@@ -122,8 +122,7 @@ KeyboardPanel {
 
   focusTarget: keyCatcher
   contentWidth: fittedContentWidth(Style.space(400))
-  contentHeight: fittedContentHeight(settingsColumn.implicitHeight)
-
+  contentHeight: fittedContentHeight(panelColumn.implicitHeight)
   centerOnBar: true
 
   PanelKeyCatcher {
@@ -132,336 +131,375 @@ KeyboardPanel {
     blocked: nameInput.activeFocus || dateInput.activeFocus || timeInput.activeFocus
     onCloseRequested: root.close()
 
-    Column {
-      id: settingsColumn
-      width: parent.width
-      spacing: Style.spacing.md
+    Flickable {
+      anchors.fill: parent
+      contentHeight: panelColumn.implicitHeight
+      clip: true
+      flickableDirection: Flickable.VerticalFlick
 
-      Row {
+      Column {
+        id: panelColumn
         width: parent.width
-        spacing: Style.spacing.sm
+        spacing: Style.spacing.md
 
-        Text {
-          text: "\uf135"
-          font.family: Style.font.family
-          font.pixelSize: Style.font.title
-          anchors.verticalCenter: parent.verticalCenter
-        }
-
-        Column {
-          width: parent.width - Style.space(60)
-          spacing: 1
-          anchors.verticalCenter: parent.verticalCenter
+        // ---- Header ----
+        Row {
+          width: parent.width
+          spacing: Style.spacing.sm
 
           Text {
-            text: "Mimo Countdown"
-            color: Color.foreground
+            text: "\uf135"
             font.family: Style.font.family
-            font.pixelSize: Style.font.subtitle
-            font.bold: true
+            font.pixelSize: Style.font.title
+            anchors.verticalCenter: parent.verticalCenter
           }
 
-          Text {
-            text: "Manage your countdowns"
-            color: Color.muted
-            font.family: Style.font.family
-            font.pixelSize: Style.font.caption
-          }
-        }
-
-        Button {
-          iconText: "\udb80\udd56"
-          tooltipText: "Close"
-          anchors.verticalCenter: parent.verticalCenter
-          onClicked: root.close()
-        }
-      }
-
-      PanelSeparator { foreground: Color.foreground }
-
-      // ---- Countdown list ----
-      PanelSectionHeader {
-        text: "COUNTDOWNS"
-        foreground: Color.foreground
-      }
-
-      Repeater {
-        model: root.countdowns
-
-        Rectangle {
-          width: settingsColumn.width
-          height: 40
-          radius: 6
-          color: index === root.selectedIndex
-            ? (root.bar ? Qt.rgba(root.bar.accent.r, root.bar.accent.g, root.bar.accent.b, 0.15) : Qt.rgba(0.4, 0.6, 1.0, 0.15))
-            : "transparent"
-
-          property var entry: modelData
-
-          Row {
-            anchors.fill: parent
-            anchors.margins: 4
-            spacing: 8
+          Column {
+            width: parent.width - Style.space(60)
+            spacing: 1
+            anchors.verticalCenter: parent.verticalCenter
 
             Text {
-              text: entry.name || "Unnamed"
+              text: "Mimo Countdown"
               color: Color.foreground
               font.family: Style.font.family
-              font.pixelSize: Style.font.body
-              width: parent.width - 120
-              anchors.verticalCenter: parent.verticalCenter
-              elide: Text.ElideRight
+              font.pixelSize: Style.font.subtitle
+              font.bold: true
             }
 
             Text {
-              text: entry.date
+              text: root.countdowns.length + " countdown(s)"
               color: Color.muted
               font.family: Style.font.family
               font.pixelSize: Style.font.caption
-              anchors.verticalCenter: parent.verticalCenter
-              width: 70
             }
+          }
+
+          Button {
+            iconText: "\udb80\udd56"
+            tooltipText: "Close"
+            anchors.verticalCenter: parent.verticalCenter
+            onClicked: root.close()
+          }
+        }
+
+        PanelSeparator { foreground: Color.foreground }
+
+        // ---- Countdown list (click to select) ----
+        PanelSectionHeader {
+          text: "SELECT COUNTDOWN"
+          foreground: Color.foreground
+        }
+
+        Repeater {
+          model: root.countdowns
+
+          Rectangle {
+            width: panelColumn.width
+            height: 44
+            radius: 6
+            color: index === root.selectedIndex
+              ? (root.bar ? Qt.rgba(root.bar.accent.r, root.bar.accent.g, root.bar.accent.b, 0.20) : Qt.rgba(0.4, 0.6, 1.0, 0.20))
+              : Qt.rgba(0, 0, 0, 0)
+
+            property var entry: modelData
+            property var cd: Model.calculateCountdown(clock.date, entry.date, entry.time)
+            property bool urgent: cd && Model.isUrgent(cd, root.urgentThresholdDays)
 
             Row {
-              spacing: 4
-              anchors.verticalCenter: parent.verticalCenter
+              anchors.fill: parent
+              anchors.margins: 6
+              spacing: 8
 
-              Button {
-                iconText: "\uf040"
-                tooltipText: "Edit"
-                onClicked: root.openEdit(index)
+              Column {
+                width: parent.width - 80
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 1
+
+                Text {
+                  text: entry.name || "Unnamed"
+                  color: urgent ? Color.urgent : Color.foreground
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.body
+                  font.bold: index === root.selectedIndex
+                  elide: Text.ElideRight
+                  width: parent.width
+                }
+
+                Text {
+                  text: entry.date + (entry.time ? " " + entry.time : "")
+                  color: Color.muted
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.caption
+                }
               }
 
-              Button {
-                iconText: "\uf2ed"
-                tooltipText: "Remove"
-                onClicked: root.removeEntry(index)
+              Text {
+                text: cd ? Model.formatRelative(cd) : "—"
+                color: urgent ? Color.urgent : Color.muted
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+                anchors.verticalCenter: parent.verticalCenter
+                width: 70
+                horizontalAlignment: Text.AlignRight
+              }
+            }
+
+            MouseArea {
+              anchors.fill: parent
+              cursorShape: Qt.PointingHandCursor
+              onClicked: {
+                root.selectEntry(index)
+                root.close()
               }
             }
           }
         }
-      }
 
-      Text {
-        visible: root.countdowns.length === 0
-        text: "No countdowns yet."
-        color: Color.muted
-        font.family: Style.font.family
-        font.pixelSize: Style.font.body
-        width: parent.width
-        horizontalAlignment: Text.AlignHCenter
-      }
+        Text {
+          visible: root.countdowns.length === 0
+          text: "No countdowns yet. Add one below."
+          color: Color.muted
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body
+          width: parent.width
+          horizontalAlignment: Text.AlignHCenter
+        }
 
-      PanelSeparator { foreground: Color.foreground }
+        PanelSeparator { foreground: Color.foreground }
 
-      // ---- Add / Edit form ----
-      PanelSectionHeader {
-        text: root.editingIndex >= 0 ? "EDIT COUNTDOWN" : "NEW COUNTDOWN"
-        foreground: Color.foreground
-      }
+        // ---- Add / Edit form ----
+        PanelSectionHeader {
+          text: root.editingIndex >= 0 ? "EDIT COUNTDOWN" : "NEW COUNTDOWN"
+          foreground: Color.foreground
+        }
 
-      Column {
-        width: parent.width
-        spacing: Style.spacing.sm
-
-        Row {
+        Column {
           width: parent.width
           spacing: Style.spacing.sm
 
-          Text {
-            text: "Name:"
-            color: Color.foreground
-            font.family: Style.font.family
-            font.pixelSize: Style.font.body
-            width: 50
-            anchors.verticalCenter: parent.verticalCenter
+          Row {
+            width: parent.width
+            spacing: Style.spacing.sm
+
+            Text {
+              text: "Name:"
+              color: Color.foreground
+              font.family: Style.font.family
+              font.pixelSize: Style.font.body
+              width: 50
+              anchors.verticalCenter: parent.verticalCenter
+            }
+
+            TextField {
+              id: nameInput
+              width: parent.width - 55
+              placeholderText: "e.g. Project Launch"
+              text: root.editName
+              onTextChanged: root.editName = text
+            }
           }
 
-          TextField {
-            id: nameInput
-            width: parent.width - 55
-            placeholderText: "e.g. Project Launch"
-            text: root.editName
-            onTextChanged: root.editName = text
+          Row {
+            width: parent.width
+            spacing: Style.spacing.sm
+
+            Text {
+              text: "Date:"
+              color: Color.foreground
+              font.family: Style.font.family
+              font.pixelSize: Style.font.body
+              width: 50
+              anchors.verticalCenter: parent.verticalCenter
+            }
+
+            TextField {
+              id: dateInput
+              width: parent.width - 55
+              placeholderText: "YYYY-MM-DD"
+              text: root.editDate
+              onTextChanged: root.editDate = text
+            }
+          }
+
+          Row {
+            width: parent.width
+            spacing: Style.spacing.sm
+
+            Text {
+              text: "Time:"
+              color: Color.foreground
+              font.family: Style.font.family
+              font.pixelSize: Style.font.body
+              width: 50
+              anchors.verticalCenter: parent.verticalCenter
+            }
+
+            TextField {
+              id: timeInput
+              width: parent.width - 55
+              placeholderText: "HH:MM (optional)"
+              text: root.editTime
+              onTextChanged: root.editTime = text
+            }
+          }
+
+          Row {
+            width: parent.width
+            spacing: Style.spacing.sm
+
+            Button {
+              text: root.editingIndex >= 0 ? "Save" : "Add"
+              iconText: "\uf00c"
+              width: parent.width / 2
+              enabled: Model.isValidDate(root.editDate)
+              onClicked: root.saveEntry()
+            }
+
+            Button {
+              text: "Cancel"
+              iconText: "\uf00d"
+              width: parent.width / 2
+              onClicked: { root.editingIndex = -1; root.editName = ""; root.editDate = ""; root.editTime = ""; }
+            }
+          }
+
+          // Edit buttons for existing entries
+          Row {
+            width: parent.width
+            spacing: Style.spacing.sm
+            visible: root.editingIndex === -1 && root.countdowns.length > 0
+
+            Button {
+              text: "Edit Selected"
+              iconText: "\uf040"
+              width: parent.width / 2
+              enabled: root.selectedIndex >= 0 && root.selectedIndex < root.countdowns.length
+              onClicked: root.openEdit(root.selectedIndex)
+            }
+
+            Button {
+              text: "Remove Selected"
+              iconText: "\uf2ed"
+              width: parent.width / 2
+              enabled: root.selectedIndex >= 0 && root.selectedIndex < root.countdowns.length
+              onClicked: root.removeEntry(root.selectedIndex)
+            }
           }
         }
 
-        Row {
+        PanelSeparator { foreground: Color.foreground }
+
+        // ---- Display settings ----
+        PanelSectionHeader {
+          text: "DISPLAY MODE"
+          foreground: Color.foreground
+        }
+
+        ButtonGroup {
           width: parent.width
-          spacing: Style.spacing.sm
-
-          Text {
-            text: "Date:"
-            color: Color.foreground
-            font.family: Style.font.family
-            font.pixelSize: Style.font.body
-            width: 50
-            anchors.verticalCenter: parent.verticalCenter
-          }
-
-          TextField {
-            id: dateInput
-            width: parent.width - 55
-            placeholderText: "YYYY-MM-DD"
-            text: root.editDate
-            onTextChanged: root.editDate = text
-          }
+          spacing: Style.spacing.xs
+          options: [
+            { value: "auto", label: "Auto", tooltip: "Largest unit" },
+            { value: "years", label: "Years", tooltip: "Always years" },
+            { value: "months", label: "Months", tooltip: "Always months" },
+            { value: "days", label: "Days", tooltip: "Always days" },
+            { value: "hours", label: "Hours", tooltip: "Always hours" },
+            { value: "minutes", label: "Min", tooltip: "Always minutes" }
+          ]
+          value: root.displayMode
+          onChanged: function(val) { root.persistSetting("displayMode", val) }
         }
 
-        Row {
+        PanelSectionHeader {
+          text: "ICON"
+          foreground: Color.foreground
+        }
+
+        ButtonGroup {
           width: parent.width
-          spacing: Style.spacing.sm
-
-          Text {
-            text: "Time:"
-            color: Color.foreground
-            font.family: Style.font.family
-            font.pixelSize: Style.font.body
-            width: 50
-            anchors.verticalCenter: parent.verticalCenter
-          }
-
-          TextField {
-            id: timeInput
-            width: parent.width - 55
-            placeholderText: "HH:MM (optional)"
-            text: root.editTime
-            onTextChanged: root.editTime = text
-          }
+          spacing: Style.spacing.xs
+          options: [
+            { value: "rocket", label: "\uf135 Rocket", tooltip: "Nerd Font Rocket" },
+            { value: "hourglass", label: "\uf252 Hourglass", tooltip: "Nerd Font Hourglass" },
+            { value: "none", label: "Off", tooltip: "No Icon" }
+          ]
+          value: root.iconStyle
+          onChanged: function(val) { root.persistSetting("iconStyle", val) }
         }
 
-        Row {
+        PanelSectionHeader {
+          text: "BADGE"
+          foreground: Color.foreground
+        }
+
+        ButtonGroup {
           width: parent.width
-          spacing: Style.spacing.sm
-
-          Button {
-            text: root.editingIndex >= 0 ? "Save" : "Add"
-            iconText: "\uf00c"
-            width: parent.width / 2
-            enabled: Model.isValidDate(root.editDate)
-            onClicked: root.saveEntry()
-          }
-
-          Button {
-            text: "Cancel"
-            iconText: "\uf00d"
-            width: parent.width / 2
-            onClicked: { root.editingIndex = -1; root.editName = ""; root.editDate = ""; root.editTime = ""; }
-          }
+          spacing: Style.spacing.xs
+          options: [
+            { value: "flat", label: "Flat", tooltip: "Transparent" },
+            { value: "pill", label: "Pill", tooltip: "Rounded border" }
+          ]
+          value: root.badgeStyle
+          onChanged: function(val) { root.persistSetting("badgeStyle", val) }
         }
-      }
 
-      PanelSeparator { foreground: Color.foreground }
+        PanelSectionHeader {
+          text: "URGENT THRESHOLD (DAYS)"
+          foreground: Color.foreground
+        }
 
-      // ---- Display settings ----
-      PanelSectionHeader {
-        text: "DISPLAY MODE"
-        foreground: Color.foreground
-      }
+        PanelSlider {
+          width: parent.width
+          minimum: 0
+          maximum: 30
+          step: 1
+          integer: true
+          value: root.urgentThresholdDays
+          onReleased: root.persistSetting("urgentThresholdDays", value)
+        }
 
-      ButtonGroup {
-        width: parent.width
-        spacing: Style.spacing.xs
-        options: [
-          { value: "auto", label: "Auto", tooltip: "Largest unit" },
-          { value: "years", label: "Years", tooltip: "Always years" },
-          { value: "months", label: "Months", tooltip: "Always months" },
-          { value: "days", label: "Days", tooltip: "Always days" },
-          { value: "hours", label: "Hours", tooltip: "Always hours" },
-          { value: "minutes", label: "Min", tooltip: "Always minutes" }
-        ]
-        value: root.displayMode
-        onChanged: function(val) { root.persistSetting("displayMode", val) }
-      }
+        PanelSeparator { foreground: Color.foreground }
 
-      PanelSectionHeader {
-        text: "ICON"
-        foreground: Color.foreground
-      }
+        PanelSectionHeader {
+          text: "BAR POSITION"
+          foreground: Color.foreground
+        }
 
-      ButtonGroup {
-        width: parent.width
-        spacing: Style.spacing.xs
-        options: [
-          { value: "rocket", label: "\uf135 Rocket", tooltip: "Nerd Font Rocket" },
-          { value: "hourglass", label: "\uf252 Hourglass", tooltip: "Nerd Font Hourglass" },
-          { value: "none", label: "Off", tooltip: "No Icon" }
-        ]
-        value: root.iconStyle
-        onChanged: function(val) { root.persistSetting("iconStyle", val) }
-      }
-
-      PanelSectionHeader {
-        text: "BADGE"
-        foreground: Color.foreground
-      }
-
-      ButtonGroup {
-        width: parent.width
-        spacing: Style.spacing.xs
-        options: [
-          { value: "flat", label: "Flat", tooltip: "Transparent" },
-          { value: "pill", label: "Pill", tooltip: "Rounded border" }
-        ]
-        value: root.badgeStyle
-        onChanged: function(val) { root.persistSetting("badgeStyle", val) }
-      }
-
-      PanelSectionHeader {
-        text: "URGENT THRESHOLD (DAYS)"
-        foreground: Color.foreground
-      }
-
-      PanelSlider {
-        width: parent.width
-        minimum: 0
-        maximum: 30
-        step: 1
-        integer: true
-        value: root.urgentThresholdDays
-        onReleased: root.persistSetting("urgentThresholdDays", value)
-      }
-
-      PanelSeparator { foreground: Color.foreground }
-
-      PanelSectionHeader {
-        text: "BAR POSITION"
-        foreground: Color.foreground
-      }
-
-      ButtonGroup {
-        width: parent.width
-        spacing: Style.spacing.xs
-        options: [
-          { value: "left", label: "Left", tooltip: "Left section" },
-          { value: "center", label: "Center", tooltip: "Center section" },
-          { value: "right", label: "Right", tooltip: "Right section" }
-        ]
-        value: root.currentBarSection
-        onChanged: function(val) {
-          if (!bar || !bar.shell || typeof bar.shell.mutateShellConfig !== "function") return
-          bar.shell.mutateShellConfig(function(config) {
-            if (!config.bar) config.bar = {}
-            if (!config.bar.layout) config.bar.layout = {}
-            var sections = ["left", "center", "right"]
-            var movedEntry = null
-            for (var s = 0; s < sections.length; s++) {
-              var arr = config.bar.layout[sections[s]]
-              if (Array.isArray(arr)) {
-                for (var i = 0; i < arr.length; i++) {
-                  var item = arr[i]
-                  var id = typeof item === "string" ? item : (item ? item.id : "")
-                  if (id === "suva.mimo-countdown") {
-                    movedEntry = arr.splice(i, 1)[0]
-                    break
+        ButtonGroup {
+          width: parent.width
+          spacing: Style.spacing.xs
+          options: [
+            { value: "left", label: "Left", tooltip: "Left section" },
+            { value: "center", label: "Center", tooltip: "Center section" },
+            { value: "right", label: "Right", tooltip: "Right section" }
+          ]
+          value: root.currentBarSection
+          onChanged: function(val) {
+            if (!bar || !bar.shell || typeof bar.shell.mutateShellConfig !== "function") return
+            bar.shell.mutateShellConfig(function(config) {
+              if (!config.bar) config.bar = {}
+              if (!config.bar.layout) config.bar.layout = {}
+              var sections = ["left", "center", "right"]
+              var movedEntry = null
+              for (var s = 0; s < sections.length; s++) {
+                var arr = config.bar.layout[sections[s]]
+                if (Array.isArray(arr)) {
+                  for (var i = 0; i < arr.length; i++) {
+                    var item = arr[i]
+                    var id = typeof item === "string" ? item : (item ? item.id : "")
+                    if (id === "suva.mimo-countdown") {
+                      movedEntry = arr.splice(i, 1)[0]
+                      break
+                    }
                   }
                 }
               }
-            }
-            if (!movedEntry) movedEntry = { id: "suva.mimo-countdown" }
-            if (!Array.isArray(config.bar.layout[val])) config.bar.layout[val] = []
-            config.bar.layout[val].push(movedEntry)
-          })
+              if (!movedEntry) movedEntry = { id: "suva.mimo-countdown" }
+              if (!Array.isArray(config.bar.layout[val])) config.bar.layout[val] = []
+              config.bar.layout[val].push(movedEntry)
+            })
+          }
         }
       }
     }

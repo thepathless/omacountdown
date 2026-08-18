@@ -48,9 +48,8 @@ BarWidget {
       lines.push("Click to select one");
     }
     lines.push("");
-    lines.push("• Left-click: Select");
-    lines.push("• Middle-click: Cycle");
-    lines.push("• Right-click: Settings");
+    lines.push("• Left-click: Open panel");
+    lines.push("• Middle-click: Cycle countdowns");
     return lines.join("\n");
   }
 
@@ -68,22 +67,14 @@ BarWidget {
     }
   }
 
-  // ---- Panel loader pattern (KeyboardPanel for settings) ----
+  // ---- Panel loader ----
   readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
   readonly property bool popoutSwitchClosing: panelLoader.item ? panelLoader.item.popoutSwitchClosing === true : false
 
-  function open() {
-    if (panelLoader.item) panelLoader.item.open();
-  }
-  function close() {
-    if (panelLoader.item) panelLoader.item.close();
-  }
-  function togglePanel() {
-    if (panelLoader.item) panelLoader.item.toggle();
-  }
-  function closeForPopoutSwitch() {
-    if (panelLoader.item) panelLoader.item.closeForPopoutSwitch();
-  }
+  function open() { if (panelLoader.item) panelLoader.item.open(); }
+  function close() { if (panelLoader.item) panelLoader.item.close(); }
+  function togglePanel() { if (panelLoader.item) panelLoader.item.toggle(); }
+  function closeForPopoutSwitch() { if (panelLoader.item) panelLoader.item.closeForPopoutSwitch(); }
 
   function injectPanel() {
     var target = panelLoader.item;
@@ -105,18 +96,15 @@ BarWidget {
   IpcHandler {
     target: "suva.mimo-countdown"
     function refresh(): void { root.updateTime(); }
-    function selectNext(): void {
-      if (panelLoader.item) panelLoader.item.cycleNext();
-    }
-    function toggle(): void { selectPopup.open = !selectPopup.open; }
-    function open(): void { selectPopup.open = true; }
-    function close(): void { selectPopup.open = false; }
-    function settings(): void { root.togglePanel(); }
+    function selectNext(): void { if (panelLoader.item) panelLoader.item.cycleNext(); }
+    function toggle(): void { root.togglePanel(); }
+    function open(): void { root.open(); }
+    function close(): void { root.close(); }
   }
 
   implicitWidth: root.vertical
     ? barSize
-    : (buttonHorizontal.implicitWidth + (root.currentBadgeStyle !== "flat" ? 12 : 0))
+    : (button.implicitWidth + (root.currentBadgeStyle !== "flat" ? 12 : 0))
   implicitHeight: root.vertical
     ? (verticalColumn.implicitHeight + 8)
     : barSize
@@ -181,21 +169,12 @@ BarWidget {
           if (btn === Qt.MiddleButton) {
             if (panelLoader.item) panelLoader.item.cycleNext();
           } else {
-            selectPopup.open = !selectPopup.open;
+            root.togglePanel();
           }
         }
         onWheelMoved: function(delta) {
           if (panelLoader.item) panelLoader.item.cycleNext();
         }
-      }
-
-      // Hidden button for Panel anchorItem
-      WidgetButton {
-        id: buttonHorizontal
-        anchors.centerIn: parent
-        bar: root.bar
-        text: root.fullLabel
-        visible: false
       }
     }
 
@@ -238,7 +217,7 @@ BarWidget {
           if (mouse.button === Qt.MiddleButton) {
             if (panelLoader.item) panelLoader.item.cycleNext();
           } else {
-            selectPopup.open = !selectPopup.open;
+            root.togglePanel();
           }
         }
         onWheel: function(wheel) {
@@ -246,156 +225,6 @@ BarWidget {
         }
         onEntered: if (root.bar) root.bar.showTooltip(root, root.tooltipInfo)
         onExited: if (root.bar) root.bar.hideTooltip(root)
-      }
-    }
-  }
-
-  // ----------------------------------------------------------------
-  // Quick-Select Popup (no keyboard input needed)
-  // ----------------------------------------------------------------
-  PopupCard {
-    id: selectPopup
-    anchorItem: button
-    bar: root.bar
-    contentWidth: Style.space(340)
-    contentHeight: fittedContentHeight(selectContent.implicitHeight)
-    open: false
-    triggerMode: "click"
-
-    Column {
-      id: selectContent
-      width: parent.width
-      spacing: Style.spacing.md
-
-      Row {
-        width: parent.width
-        spacing: Style.spacing.sm
-
-        Text {
-          text: "\uf135"
-          font.family: Style.font.family
-          font.pixelSize: Style.font.title
-          anchors.verticalCenter: parent.verticalCenter
-        }
-
-        Column {
-          width: parent.width - Style.space(60)
-          spacing: 1
-          anchors.verticalCenter: parent.verticalCenter
-
-          Text {
-            text: "Countdowns"
-            color: Color.foreground
-            font.family: Style.font.family
-            font.pixelSize: Style.font.subtitle
-            font.bold: true
-          }
-
-          Text {
-            text: root.countdowns.length + " active"
-            color: Color.muted
-            font.family: Style.font.family
-            font.pixelSize: Style.font.caption
-          }
-        }
-
-        Button {
-          iconText: "\udb80\udd56"
-          tooltipText: "Close"
-          anchors.verticalCenter: parent.verticalCenter
-          onClicked: selectPopup.close()
-        }
-      }
-
-      PanelSeparator { foreground: Color.foreground }
-
-      Repeater {
-        model: root.countdowns
-
-        Rectangle {
-          width: selectContent.width
-          height: 48
-          radius: 6
-          color: index === root.selectedIndex
-            ? (root.bar ? Qt.rgba(root.bar.accent.r, root.bar.accent.g, root.bar.accent.b, 0.20) : Qt.rgba(0.4, 0.6, 1.0, 0.20))
-            : Qt.rgba(0, 0, 0, 0)
-
-          property var entry: modelData
-          property var cd: Model.calculateCountdown(clock.date, entry.date, entry.time)
-          property bool urgent: cd && Model.isUrgent(cd, root.currentUrgentThresholdDays)
-
-          Row {
-            anchors.fill: parent
-            anchors.margins: 8
-            spacing: 8
-
-            Column {
-              width: parent.width - 70
-              anchors.verticalCenter: parent.verticalCenter
-              spacing: 2
-
-              Text {
-                text: entry.name || "Unnamed"
-                color: urgent ? Color.urgent : Color.foreground
-                font.family: Style.font.family
-                font.pixelSize: Style.font.body
-                font.bold: index === root.selectedIndex
-                elide: Text.ElideRight
-                width: parent.width
-              }
-
-              Text {
-                text: entry.date + (entry.time ? " " + entry.time : "")
-                color: Color.muted
-                font.family: Style.font.family
-                font.pixelSize: Style.font.caption
-              }
-            }
-
-            Text {
-              text: cd ? Model.formatRelative(cd) : "—"
-              color: urgent ? Color.urgent : Color.muted
-              font.family: Style.font.family
-              font.pixelSize: Style.font.caption
-              anchors.verticalCenter: parent.verticalCenter
-              width: 62
-              horizontalAlignment: Text.AlignRight
-            }
-          }
-
-          MouseArea {
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            onClicked: {
-              if (panelLoader.item) panelLoader.item.selectEntry(index);
-              selectPopup.close();
-            }
-          }
-        }
-      }
-
-      Text {
-        visible: root.countdowns.length === 0
-        text: "No countdowns yet.\nClick Settings to add one."
-        color: Color.muted
-        font.family: Style.font.family
-        font.pixelSize: Style.font.body
-        width: parent.width
-        horizontalAlignment: Text.AlignHCenter
-        lineHeight: 1.4
-      }
-
-      PanelSeparator { foreground: Color.foreground }
-
-      Button {
-        width: parent.width
-        text: "Settings"
-        iconText: "\uf013"
-        tooltipText: "Add, edit, or remove countdowns"
-        onClicked: {
-          selectPopup.close();
-          root.togglePanel();
-        }
       }
     }
   }
