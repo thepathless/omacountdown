@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "id": "suva.mimo-countdown",
+  "name": "Mimo Countdown",
+  "version": "2.0.0",
+  "author": "Suva",
+  "description": "Multiple named countdown timers displayed on your status bar.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Mimo Countdown",
+    "description": "Multiple named countdown timers for your bar",
+    "category": "Time",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "countdowns": [],
+      "selectedIndex": 0,
+      "displayMode": "auto",
+      "iconStyle": "rocket",
+      "showIcon": true,
+      "badgeStyle": "flat",
+      "urgentThresholdDays": 7
+    },
+    "schema": [
+      {
+        "key": "countdowns",
+        "type": "string",
+        "label": "Countdowns",
+        "defaultValue": "[]",
+        "description": "JSON array of countdowns. Each entry has name, date (YYYY-MM-DD), and time (HH:MM). Managed via the widget popup."
+      },
+      {
+        "key": "selectedIndex",
+        "type": "integer",
+        "label": "Selected Index",
+        "defaultValue": 0,
+        "description": "Which countdown to display on the bar (0-based index into the countdowns array)."
+      },
+      {
+        "key": "displayMode",
+        "type": "enum",
+        "label": "Display Mode",
+        "options": ["auto", "years", "months", "days", "hours", "minutes"],
+        "defaultValue": "auto",
+        "description": "How to format the time remaining. Auto picks the largest unit."
+      },
+      {
+        "key": "iconStyle",
+        "type": "enum",
+        "label": "Icon Style",
+        "options": ["rocket", "hourglass", "none"],
+        "defaultValue": "rocket",
+        "description": "Prefix icon on the bar."
+      },
+      {
+        "key": "showIcon",
+        "type": "boolean",
+        "label": "Show Icon",
+        "defaultValue": true,
+        "description": "Show or hide the icon on the bar."
+      },
+      {
+        "key": "badgeStyle",
+        "type": "enum",
+        "label": "Badge Style",
+        "options": ["flat", "pill"],
+        "defaultValue": "flat",
+        "description": "Background style on the bar."
+      },
+      {
+        "key": "urgentThresholdDays",
+        "type": "integer",
+        "label": "Urgent Threshold (days)",
+        "min": 0,
+        "max": 365,
+        "step": 1,
+        "defaultValue": 7,
+        "description": "Highlight in urgent color when fewer days remain than this threshold."
+      }
+    ]
+  }
+}
