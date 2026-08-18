@@ -13,7 +13,8 @@ BarWidget {
   readonly property var countdowns: setting("countdowns", [])
   readonly property int selectedIndex: setting("selectedIndex", 0)
   readonly property string currentDisplayMode: setting("displayMode", "auto")
-  readonly property string currentIconStyle: setting("iconStyle", "rocket")
+  readonly property string currentIconStyle: setting("iconStyle", "nerd")
+  readonly property string currentCustomEmoji: setting("customEmoji", "")
   readonly property bool currentShowIcon: setting("showIcon", true)
   readonly property string currentBadgeStyle: setting("badgeStyle", "flat")
   readonly property int currentUrgentThresholdDays: setting("urgentThresholdDays", 7)
@@ -23,7 +24,11 @@ BarWidget {
 
   readonly property bool hasTarget: selectedEntry !== null && countdown !== null
   readonly property bool isUrgentState: hasTarget && Model.isUrgent(countdown, currentUrgentThresholdDays)
-  readonly property string activeIcon: currentShowIcon ? Model.getIcon(currentIconStyle) : ""
+  readonly property string activeIcon: {
+    if (!currentShowIcon) return ""
+    if (currentIconStyle === "custom" && currentCustomEmoji !== "") return currentCustomEmoji
+    return Model.getIcon(currentIconStyle)
+  }
   readonly property string activeText: {
     if (!hasTarget) return countdowns.length > 0 ? "Select" : "Add one";
     var name = selectedEntry.name || "Countdown";
@@ -83,6 +88,7 @@ BarWidget {
     if ("settings" in target) target.settings = root.settings;
     if ("anchorItem" in target) target.anchorItem = button;
     if ("hostWidget" in target) target.hostWidget = root;
+    if ("persistSetting" in target) target.persistSetting = root.updateSetting;
   }
 
   Component.onCompleted: { updateTime(); }

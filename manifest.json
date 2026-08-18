@@ -21,7 +21,8 @@
       "countdowns": [],
       "selectedIndex": 0,
       "displayMode": "auto",
-      "iconStyle": "rocket",
+      "iconStyle": "nerd",
+      "customEmoji": "",
       "showIcon": true,
       "badgeStyle": "flat",
       "urgentThresholdDays": 7
@@ -53,9 +54,16 @@
         "key": "iconStyle",
         "type": "enum",
         "label": "Icon Style",
-        "options": ["rocket", "hourglass", "none"],
-        "defaultValue": "rocket",
-        "description": "Prefix icon on the bar."
+        "options": ["nerd", "hourglass", "custom", "none"],
+        "defaultValue": "nerd",
+        "description": "Prefix icon: 'nerd' (Nerd Font rocket), 'hourglass' (hourglass), 'custom' (any emoji), or 'none'."
+      },
+      {
+        "key": "customEmoji",
+        "type": "string",
+        "label": "Custom Emoji",
+        "defaultValue": "",
+        "description": "When iconStyle is 'custom', this emoji is shown on the bar."
       },
       {
         "key": "showIcon",

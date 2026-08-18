@@ -92,9 +92,9 @@ function formatRelative(countdown) {
 
 function getIcon(iconStyle) {
   switch (iconStyle) {
-    case "rocket": return "\uf135";
     case "nerd": return "\uf135";
     case "hourglass": return "\uf252";
+    case "custom": return "";
     case "none": return "";
     default: return "\uf135";
   }

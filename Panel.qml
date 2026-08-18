@@ -14,10 +14,15 @@ Panel {
   property var hostWidget: null
   readonly property var barIdentity: hostWidget || root
 
+  // Live function reference to BarWidget's updateSetting — fixes stale snapshot
+  property var persistSetting: null
+
+  // Read directly from bar settings (kept in sync by BarWidget)
   property var countdowns: settings ? (settings.countdowns || []) : []
   property int selectedIndex: settings ? (settings.selectedIndex || 0) : 0
   property string displayMode: settings ? (settings.displayMode || "auto") : "auto"
-  property string iconStyleSetting: settings ? (settings.iconStyle || "rocket") : "rocket"
+  property string iconStyleSetting: settings ? (settings.iconStyle || "nerd") : "nerd"
+  property string customEmoji: settings ? (settings.customEmoji || "") : ""
   property bool showIcon: settings ? (settings.showIcon !== false) : true
   property string badgeStyle: settings ? (settings.badgeStyle || "flat") : "flat"
   property int urgentThresholdDays: settings ? (settings.urgentThresholdDays || 7) : 7
@@ -101,16 +106,6 @@ Panel {
     persistSetting("selectedIndex", ((selectedIndex || 0) + 1) % countdowns.length)
   }
 
-  function persistSetting(key, val) {
-    var entry = { id: "suva.mimo-countdown" }
-    for (var k in settings) if (k !== "id") entry[k] = settings[k]
-    entry[key] = val
-    settings = entry
-    if (bar && bar.shell && typeof bar.shell.updateEntryInline === "function") {
-      bar.shell.updateEntryInline("suva.mimo-countdown", entry)
-    }
-  }
-
   SystemClock {
     id: clock
     precision: SystemClock.Minutes
@@ -130,7 +125,7 @@ Panel {
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
-      blocked: nameInput.activeFocus || dateInput.activeFocus || timeInput.activeFocus
+      blocked: nameInput.activeFocus || dateInput.activeFocus || timeInput.activeFocus || emojiInput.activeFocus
       onCloseRequested: root.close()
 
       Flickable {
@@ -295,7 +290,7 @@ Panel {
                 width: parent.width - 55
                 placeholderText: "e.g. Project Launch"
                 text: root.editName
-                onTextChanged: root.editName = text
+                onEditingFinished: root.editName = text
               }
             }
 
@@ -317,7 +312,7 @@ Panel {
                 width: parent.width - 55
                 placeholderText: "YYYY-MM-DD"
                 text: root.editDate
-                onTextChanged: root.editDate = text
+                onEditingFinished: root.editDate = text
               }
             }
 
@@ -339,7 +334,7 @@ Panel {
                 width: parent.width - 55
                 placeholderText: "HH:MM (optional)"
                 text: root.editTime
-                onTextChanged: root.editTime = text
+                onEditingFinished: root.editTime = text
               }
             }
 
@@ -417,12 +412,36 @@ Panel {
             width: parent.width
             spacing: Style.spacing.xs
             options: [
-              { value: "rocket", label: "\uf135 Rocket", tooltip: "Nerd Font Rocket" },
-              { value: "hourglass", label: "\uf252 Hourglass", tooltip: "Nerd Font Hourglass" },
+              { value: "nerd", label: "\uf135 Nerd", tooltip: "Nerd Font Rocket" },
+              { value: "hourglass", label: "\uf252 Glass", tooltip: "Nerd Font Hourglass" },
+              { value: "custom", label: "Custom", tooltip: "Type any emoji" },
               { value: "none", label: "Off", tooltip: "No Icon" }
             ]
             value: root.iconStyleSetting
             onChanged: function(val) { root.persistSetting("iconStyle", val) }
+          }
+
+          Row {
+            width: parent.width
+            spacing: Style.spacing.sm
+            visible: root.iconStyleSetting === "custom"
+
+            Text {
+              text: "Emoji:"
+              color: Color.foreground
+              font.family: Style.font.family
+              font.pixelSize: Style.font.body
+              width: 50
+              anchors.verticalCenter: parent.verticalCenter
+            }
+
+            TextField {
+              id: emojiInput
+              width: parent.width - 55
+              placeholderText: "Type or paste an emoji"
+              text: root.customEmoji
+              onEditingFinished: root.persistSetting("customEmoji", text)
+            }
           }
 
           PanelSectionHeader {
@@ -501,6 +520,5 @@ Panel {
         }
       }
     }
-
   }
 }
