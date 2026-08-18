@@ -134,7 +134,7 @@ function nextMode(current) {
 }
 
 function nextIconStyle(current) {
-  var styles = ["rocket", "nerd", "hourglass", "none"];
+  var styles = ["nerd", "hourglass", "custom", "none"];
   var idx = styles.indexOf(current);
   return styles[(idx + 1) % styles.length];
 }

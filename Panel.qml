@@ -14,10 +14,7 @@ Panel {
   property var hostWidget: null
   readonly property var barIdentity: hostWidget || root
 
-  // Live function reference to BarWidget's updateSetting — fixes stale snapshot
-  property var persistSetting: null
-
-  // Read directly from bar settings (kept in sync by BarWidget)
+  // These read from `settings` which is re-synced by persistSettings after every write
   property var countdowns: settings ? (settings.countdowns || []) : []
   property int selectedIndex: settings ? (settings.selectedIndex || 0) : 0
   property string displayMode: settings ? (settings.displayMode || "auto") : "auto"
@@ -26,6 +23,17 @@ Panel {
   property bool showIcon: settings ? (settings.showIcon !== false) : true
   property string badgeStyle: settings ? (settings.badgeStyle || "flat") : "flat"
   property int urgentThresholdDays: settings ? (settings.urgentThresholdDays || 7) : 7
+
+  // Local persist: builds entry, assigns locally, pushes to BarWidget, writes to disk
+  function persistSettings(key, value) {
+    var entry = { id: root.moduleName }
+    for (var k in root.settings) { if (k !== "id") entry[k] = root.settings[k]; }
+    entry[key] = value
+    root.settings = entry
+    if (root.hostWidget && "settings" in root.hostWidget) root.hostWidget.settings = entry
+    if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === "function")
+      root.bar.shell.updateEntryInline(root.moduleName, entry)
+  }
 
   readonly property string currentBarSection: {
     if (!bar || !bar.shell || !bar.shell.shellConfig) return "right"
@@ -76,8 +84,8 @@ Panel {
       list.push({ name: editName, date: editDate, time: editTime || "" })
       selectedIndex = list.length - 1
     }
-    persistSetting("countdowns", list)
-    persistSetting("selectedIndex", selectedIndex)
+    persistSettings("countdowns", list)
+    persistSettings("selectedIndex", selectedIndex)
     editingIndex = -1
     editName = ""
     editDate = ""
@@ -93,17 +101,17 @@ Panel {
       list.push({ name: c.name, date: c.date, time: c.time })
     }
     var newSel = Math.min(selectedIndex, Math.max(0, list.length - 1))
-    persistSetting("countdowns", list)
-    persistSetting("selectedIndex", newSel)
+    persistSettings("countdowns", list)
+    persistSettings("selectedIndex", newSel)
   }
 
   function selectEntry(idx) {
-    persistSetting("selectedIndex", idx)
+    persistSettings("selectedIndex", idx)
   }
 
   function cycleNext() {
     if (countdowns.length === 0) return
-    persistSetting("selectedIndex", ((selectedIndex || 0) + 1) % countdowns.length)
+    persistSettings("selectedIndex", ((selectedIndex || 0) + 1) % countdowns.length)
   }
 
   SystemClock {
@@ -399,7 +407,7 @@ Panel {
               { value: "minutes", label: "Min", tooltip: "Always minutes" }
             ]
             value: root.displayMode
-            onChanged: function(val) { root.persistSetting("displayMode", val) }
+            onChanged: function(val) { root.persistSettings("displayMode", val) }
           }
 
           PanelSectionHeader {
@@ -417,7 +425,7 @@ Panel {
               { value: "none", label: "Off", tooltip: "No Icon" }
             ]
             value: root.iconStyleSetting
-            onChanged: function(val) { root.persistSetting("iconStyle", val) }
+            onChanged: function(val) { root.persistSettings("iconStyle", val) }
           }
 
           Row {
@@ -439,7 +447,7 @@ Panel {
                 width: parent.width - 55
                 placeholderText: "Type or paste an emoji"
                 text: root.customEmoji
-                onTextChanged: root.persistSetting("customEmoji", text)
+                onTextChanged: root.persistSettings("customEmoji", text)
               }
           }
 
@@ -456,7 +464,7 @@ Panel {
               { value: "pill", label: "Pill", tooltip: "Rounded border" }
             ]
             value: root.badgeStyle
-            onChanged: function(val) { root.persistSetting("badgeStyle", val) }
+            onChanged: function(val) { root.persistSettings("badgeStyle", val) }
           }
 
           PanelSectionHeader {
@@ -471,7 +479,7 @@ Panel {
             step: 1
             integer: true
             value: root.urgentThresholdDays
-            onReleased: root.persistSetting("urgentThresholdDays", value)
+            onReleased: root.persistSettings("urgentThresholdDays", value)
           }
 
           PanelSeparator { foreground: Color.foreground }

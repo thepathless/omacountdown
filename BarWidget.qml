@@ -88,7 +88,6 @@ BarWidget {
     if ("settings" in target) target.settings = root.settings;
     if ("anchorItem" in target) target.anchorItem = button;
     if ("hostWidget" in target) target.hostWidget = root;
-    if ("persistSetting" in target) target.persistSetting = root.updateSetting;
   }
 
   Component.onCompleted: { updateTime(); }
