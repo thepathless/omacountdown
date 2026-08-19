@@ -47,7 +47,7 @@ BarWidget {
       for (var i = 0; i < arr.length; i++) {
         var item = arr[i]
         var id = typeof item === "string" ? item : (item ? item.id : "")
-        if (id === root.moduleName || id === "omacountdown" || id === "suva.omacountdown" || id === "suva.mimo-countdown") {
+        if (id === root.moduleName || id === "omacountdown") {
           return sections[s]
         }
       }
@@ -99,9 +99,6 @@ BarWidget {
     root.settings = entry
     if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === "function") {
       root.bar.shell.updateEntryInline(root.moduleName, entry)
-      if (root.moduleName !== "suva.mimo-countdown") {
-        root.bar.shell.updateEntryInline("suva.mimo-countdown", entry)
-      }
     }
   }
 
@@ -224,7 +221,7 @@ BarWidget {
       for (var i = 0; i < srcList.length; i++) {
         var item = srcList[i]
         var id = typeof item === "string" ? item : (item ? item.id : "")
-        if (id === root.moduleName || id === "omacountdown" || id === "suva.omacountdown" || id === "suva.mimo-countdown") {
+        if (id === root.moduleName || id === "omacountdown") {
           movedEntry = srcList.splice(i, 1)[0]
           break
         }
@@ -364,16 +361,17 @@ BarWidget {
   }
 
   // -------------------------------------------------------------
-  // Settings Popup Card (Scrollable via Flickable)
+  // Settings Popup Card (KeyboardPanel with Layer-Shell Focus)
   // -------------------------------------------------------------
-  PopupCard {
+  KeyboardPanel {
     id: dashboardPopup
     anchorItem: root
+    owner: root
     bar: root.bar
-    contentWidth: Style.space(420)
-    contentHeight: dashboardPopup.fittedContentHeight(popupContent.implicitHeight, Style.space(560))
     open: false
-    triggerMode: "click"
+    focusTarget: titleInput
+    contentWidth: dashboardPopup.fittedContentWidth(Style.space(420))
+    contentHeight: dashboardPopup.fittedContentHeight(popupContent.implicitHeight, Style.space(560))
 
     Flickable {
       id: popupFlickable
