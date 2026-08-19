@@ -424,13 +424,14 @@ function calculateCountdown(targetDateStr, now, startDateStr) {
 
 /**
  * Computes active units dynamically according to which date units are enabled.
- * If Years or Months are disabled, their values roll over into Days.
+ * If Years, Months, or Weeks are disabled, their values roll over seamlessly.
  */
 function getActiveUnitValues(stats, settings) {
-  if (!stats) return { years: 0, months: 0, days: 0 };
+  if (!stats) return { years: 0, months: 0, weeks: 0, days: 0 };
 
   var showY = settings ? settings.showYears !== false : true;
   var showM = settings ? settings.showMonths !== false : true;
+  var showW = settings ? settings.showWeeks === true : false;
   var showD = settings ? settings.showDays !== false : true;
 
   var current = stats.current;
@@ -462,20 +463,35 @@ function getActiveUnitValues(stats, settings) {
     }
   }
 
-  var days = 0;
-  if (showD) {
-    while (true) {
-      var nextD = new Date(temp.getFullYear(), temp.getMonth(), temp.getDate() + 1, 0, 0, 0);
-      if (nextD <= end) {
-        days++;
-        temp = nextD;
-      } else break;
+  var totalRemainingDays = 0;
+  while (true) {
+    var nextD = new Date(temp.getFullYear(), temp.getMonth(), temp.getDate() + 1, 0, 0, 0);
+    if (nextD <= end) {
+      totalRemainingDays++;
+      temp = nextD;
+    } else break;
+  }
+
+  var weeks = 0;
+  var days = totalRemainingDays;
+
+  if (showW) {
+    weeks = Math.floor(totalRemainingDays / 7);
+    if (showD) {
+      days = totalRemainingDays % 7;
+    } else {
+      days = 0;
+    }
+  } else {
+    if (!showD) {
+      days = 0;
     }
   }
 
   return {
     years: years,
     months: months,
+    weeks: weeks,
     days: days
   };
 }
@@ -509,6 +525,9 @@ function formatBarText(stats, settings) {
   if (settings ? settings.showMonths : true) {
     if (u.months > 0 || fmt === "full" || (parts.length > 0 && fmt === "auto")) parts.push(u.months + "mo");
   }
+  if (settings && settings.showWeeks) {
+    if (u.weeks > 0 || fmt === "full" || (parts.length > 0 && fmt === "auto")) parts.push(u.weeks + "w");
+  }
   if (settings ? settings.showDays : true) {
     if (u.days > 0 || fmt === "full" || (parts.length > 0 && fmt === "auto")) parts.push(u.days + "d");
   }
@@ -536,6 +555,7 @@ function formatDetailed(stats, settings) {
 
   if ((settings ? settings.showYears : true) && u.years > 0) parts.push(u.years + "y");
   if ((settings ? settings.showMonths : true) && u.months > 0) parts.push(u.months + "mo");
+  if ((settings && settings.showWeeks) && u.weeks > 0) parts.push(u.weeks + "w");
   if ((settings ? settings.showDays : true) && (u.days > 0 || parts.length > 0)) parts.push(u.days + "d");
 
   if (parts.length === 0) {

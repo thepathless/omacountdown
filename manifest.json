@@ -32,6 +32,7 @@
       "format": "auto",
       "showYears": true,
       "showMonths": true,
+      "showWeeks": false,
       "showDays": true,
       "showLabel": true,
       "style": "dynamic_progress",
@@ -94,6 +95,13 @@
         "label": "Show Months",
         "defaultValue": true,
         "description": "Include months in countdown calculations and display."
+      },
+      {
+        "key": "showWeeks",
+        "type": "boolean",
+        "label": "Show Weeks",
+        "defaultValue": false,
+        "description": "Include weeks in countdown calculations and display."
       },
       {
         "key": "showDays",

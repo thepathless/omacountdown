@@ -28,6 +28,7 @@ BarWidget {
   readonly property string currentFormat: setting("format", "auto")
   readonly property bool showYears: setting("showYears", true)
   readonly property bool showMonths: setting("showMonths", true)
+  readonly property bool showWeeks: setting("showWeeks", false)
   readonly property bool showDays: setting("showDays", true)
   readonly property bool showLabel: setting("showLabel", true)
   readonly property string currentStyle: setting("style", setting("badgeStyle", "dynamic_progress"))
@@ -87,6 +88,7 @@ BarWidget {
     format: currentFormat,
     showYears: showYears,
     showMonths: showMonths,
+    showWeeks: showWeeks,
     showDays: showDays,
     showLabel: showLabel,
     targetLabel: targetLabel
@@ -95,7 +97,7 @@ BarWidget {
 
   // Clean Omarchy Tooltip Info
   readonly property string tooltipInfo: (targetLabel || "Event") + "\n" +
-    (countdownStats ? ("Remaining: " + Model.formatDetailed(countdownStats, { showYears: showYears, showMonths: showMonths, showDays: showDays }) + "\n" +
+    (countdownStats ? ("Remaining: " + Model.formatDetailed(countdownStats, { showYears: showYears, showMonths: showMonths, showWeeks: showWeeks, showDays: showDays }) + "\n" +
      "Target: " + Model.formatDateNamed(countdownStats.target) + "\n" +
      "Status: " + (countdownStats.isPast ? "Elapsed" : "In Progress") + "\n") : "No target date set\n") +
     "──────────────────────────\n" +
@@ -483,6 +485,7 @@ BarWidget {
               text: root.countdownStats ? Model.formatDetailed(root.countdownStats, {
                 showYears: root.showYears,
                 showMonths: root.showMonths,
+                showWeeks: root.showWeeks,
                 showDays: root.showDays
               }) : "Set target date below"
               color: root.dynamicColor
@@ -683,7 +686,7 @@ BarWidget {
           Button {
             text: root.showYears ? "\uf00c Years" : "Years"
             tooltipText: "Toggle years in countdown"
-            width: (parent.width - Style.spacing.xs * 2) / 3
+            width: (parent.width - Style.spacing.xs * 3) / 4
             active: root.showYears
             accent: root.dynamicColor
             onClicked: root.updateSetting("showYears", !root.showYears)
@@ -691,15 +694,23 @@ BarWidget {
           Button {
             text: root.showMonths ? "\uf00c Months" : "Months"
             tooltipText: "Toggle months in countdown"
-            width: (parent.width - Style.spacing.xs * 2) / 3
+            width: (parent.width - Style.spacing.xs * 3) / 4
             active: root.showMonths
             accent: root.dynamicColor
             onClicked: root.updateSetting("showMonths", !root.showMonths)
           }
           Button {
+            text: root.showWeeks ? "\uf00c Weeks" : "Weeks"
+            tooltipText: "Toggle weeks in countdown"
+            width: (parent.width - Style.spacing.xs * 3) / 4
+            active: root.showWeeks
+            accent: root.dynamicColor
+            onClicked: root.updateSetting("showWeeks", !root.showWeeks)
+          }
+          Button {
             text: root.showDays ? "\uf00c Days" : "Days"
             tooltipText: "Toggle days in countdown"
-            width: (parent.width - Style.spacing.xs * 2) / 3
+            width: (parent.width - Style.spacing.xs * 3) / 4
             active: root.showDays
             accent: root.dynamicColor
             onClicked: root.updateSetting("showDays", !root.showDays)
