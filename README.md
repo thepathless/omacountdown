@@ -2,7 +2,7 @@
 
 <p align="center">
   <b>A sleek, calendar-accurate multi-target countdown timer plugin for the <a href="https://omarchy.org/">Omarchy Desktop Shell</a>.</b><br>
-  <i>Built natively for Arch Linux · Hyprland Wayland Compositor · Quickshell QML</i>
+  <i>Built natively for Omarchy · Hyprland Wayland Compositor · Quickshell QML</i>
 </p>
 
 <p align="center">
