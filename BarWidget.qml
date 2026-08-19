@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
@@ -16,12 +17,12 @@ BarWidget {
   readonly property var activeEvent: Model.getActiveEvent(root.settings)
 
   // Active countdown parameters
-  readonly property string targetLabel: activeEvent.title || "Event"
-  readonly property string targetDate: activeEvent.targetDate || ""
-  readonly property string targetTime: activeEvent.targetTime || "00:00"
-  readonly property string startDate: activeEvent.startDate || ""
-  readonly property string currentIconStyle: activeEvent.iconStyle || "medical"
-  readonly property string customEmoji: activeEvent.customEmoji || "\uf0f1"
+  readonly property string rawEventTitle: (activeEvent && activeEvent.title !== undefined) ? activeEvent.title : ""
+  readonly property string targetLabel: rawEventTitle.trim() !== "" ? rawEventTitle.trim() : "Event"
+  readonly property string rawTargetDate: (activeEvent && activeEvent.targetDate !== undefined) ? activeEvent.targetDate : ""
+  readonly property string startDate: (activeEvent && activeEvent.startDate) ? activeEvent.startDate : ""
+  readonly property string currentIconStyle: (activeEvent && activeEvent.iconStyle) ? activeEvent.iconStyle : "medical"
+  readonly property string customEmoji: (activeEvent && activeEvent.customEmoji) ? activeEvent.customEmoji : "\uf0f1"
 
   // Global display preferences
   readonly property string currentFormat: setting("format", "auto")
@@ -54,8 +55,8 @@ BarWidget {
     return "right"
   }
 
-  // Live countdown calculation
-  property var countdownStats: Model.calculateCountdown(targetDate, targetTime, clock.date, startDate)
+  // Live countdown calculation (Pure declarative binding!)
+  readonly property var countdownStats: Model.calculateCountdown(rawTargetDate, clock.date, startDate)
   property real lastWheelTime: 0
 
   readonly property bool isUrgentState: Model.isUrgent(countdownStats, currentUrgentThresholdDays)
@@ -87,33 +88,15 @@ BarWidget {
   // Clean Omarchy Tooltip Info
   readonly property string tooltipInfo: (targetLabel || "Event") + "\n" +
     (countdownStats ? ("Remaining: " + Model.formatDetailed(countdownStats, { showYears: showYears, showMonths: showMonths, showDays: showDays, showHours: showHours, showMinutes: showMinutes }) + "\n" +
-     "Target: " + Model.formatDateISO(countdownStats.target) + " " + Model.formatTimeISO(countdownStats.target) + "\n" +
+     "Target: " + Model.formatDateNamed(countdownStats.target) + "\n" +
      "Status: " + (countdownStats.isPast ? "Elapsed" : "In Progress") + "\n") : "No target date set\n") +
     "──────────────────────────\n" +
     "• Left-click: Settings & Events\n" +
     "• Middle-click: Next Event / Format\n" +
     "• Right-click: Settings & Events"
 
-  function updateTime() {
-    countdownStats = Model.calculateCountdown(targetDate, targetTime, clock.date, startDate)
-  }
-
-  onTargetDateChanged: root.updateTime()
-  onTargetTimeChanged: root.updateTime()
-  onStartDateChanged: root.updateTime()
-  onShowYearsChanged: root.updateTime()
-  onShowMonthsChanged: root.updateTime()
-  onShowDaysChanged: root.updateTime()
-  onShowHoursChanged: root.updateTime()
-  onShowMinutesChanged: root.updateTime()
-  onCurrentFormatChanged: root.updateTime()
-  onCurrentStyleChanged: root.updateTime()
-  onCurrentGradientColorChanged: root.updateTime()
-  onActiveEventIndexChanged: root.updateTime()
-
   function persistSettings(entry) {
     root.settings = entry
-    root.updateTime()
     if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === "function") {
       root.bar.shell.updateEntryInline(root.moduleName, entry)
       if (root.moduleName !== "suva.mimo-countdown") {
@@ -156,7 +139,11 @@ BarWidget {
   }
 
   function updateActiveEvent(key, val) {
-    var list = JSON.parse(JSON.stringify(Model.ensureCountdowns(root.settings)))
+    var list = Model.ensureCountdowns(root.settings).map(function(item) {
+      var copy = {}
+      for (var k in item) copy[k] = item[k]
+      return copy
+    })
     var idx = root.activeEventIndex
     if (idx < 0 || idx >= list.length) idx = 0
     list[idx][key] = val
@@ -170,7 +157,6 @@ BarWidget {
     // Keep legacy root props synced for compatibility
     if (key === "title") entry["targetLabel"] = val
     if (key === "targetDate") entry["targetDate"] = val
-    if (key === "targetTime") entry["targetTime"] = val
     if (key === "iconStyle") entry["iconStyle"] = val
     if (key === "customEmoji") entry["customEmoji"] = val
     persistSettings(entry)
@@ -223,54 +209,43 @@ BarWidget {
   function moveToSection(targetSection) {
     if (targetSection !== "left" && targetSection !== "center" && targetSection !== "right") return
     if (targetSection === currentBarSection) return
+    if (!root.bar || !root.bar.shell || typeof root.bar.shell.updateConfigInline !== "function") return
 
-    if (root.bar && root.bar.shell && typeof root.bar.shell.mutateShellConfig === "function") {
-      root.bar.shell.mutateShellConfig(function(config) {
-        if (!config.bar) config.bar = {}
-        if (!config.bar.layout) config.bar.layout = {}
-        var sections = ["left", "center", "right"]
-        var movedEntry = null
+    var shellConfig = root.bar.shell.shellConfig
+    if (!shellConfig || !shellConfig.bar || !shellConfig.bar.layout) return
 
-        for (var s = 0; s < sections.length; s++) {
-          var arr = config.bar.layout[sections[s]]
-          if (Array.isArray(arr)) {
-            for (var i = 0; i < arr.length; i++) {
-              var item = arr[i]
-              var id = typeof item === "string" ? item : (item ? item.id : "")
-              if (id === root.moduleName || id === "omacountdown" || id === "suva.omacountdown" || id === "suva.mimo-countdown") {
-                movedEntry = arr.splice(i, 1)[0]
-                break
-              }
-            }
-          }
+    var currentSection = currentBarSection
+    root.bar.shell.updateConfigInline(function(config) {
+      if (!config.bar || !config.bar.layout) return
+      var srcList = config.bar.layout[currentSection]
+      if (!Array.isArray(srcList)) return
+
+      var movedEntry = null
+      for (var i = 0; i < srcList.length; i++) {
+        var item = srcList[i]
+        var id = typeof item === "string" ? item : (item ? item.id : "")
+        if (id === root.moduleName || id === "omacountdown" || id === "suva.omacountdown" || id === "suva.mimo-countdown") {
+          movedEntry = srcList.splice(i, 1)[0]
+          break
         }
+      }
+      if (!movedEntry) return
 
-        if (!movedEntry) {
-          movedEntry = { id: root.moduleName }
-        }
-
-        if (!Array.isArray(config.bar.layout[targetSection])) {
-          config.bar.layout[targetSection] = []
-        }
-        config.bar.layout[targetSection].push(movedEntry)
-      })
-    }
-  }
-
-  Component.onCompleted: {
-    updateTime()
+      if (!Array.isArray(config.bar.layout[targetSection])) {
+        config.bar.layout[targetSection] = []
+      }
+      config.bar.layout[targetSection].push(movedEntry)
+    })
   }
 
   SystemClock {
     id: clock
     precision: SystemClock.Minutes
-    onDateChanged: root.updateTime()
   }
 
   IpcHandler {
     target: "omacountdown"
 
-    function refresh(): void { root.broadcast("updateTime") }
     function nextEvent(): void { root.cycleNextCountdown() }
     function cycleFormat(): void { root.cycleFormat() }
     function cycleStyle(): void { root.cycleStyle() }
@@ -288,122 +263,94 @@ BarWidget {
     : barSize
 
   // -------------------------------------------------------------
-  // Main Widget Surface (Horizontal & Vertical)
+  // Vertical Bar Presentation
+  // -------------------------------------------------------------
+  Column {
+    id: verticalColumn
+    visible: root.vertical
+    anchors.centerIn: parent
+    spacing: 2
+    width: parent.width
+
+    Text {
+      visible: root.activeIcon !== ""
+      text: root.activeIcon
+      color: (root.currentStyle === "accent_text" || root.currentStyle === "dynamic_progress" || root.isUrgentState) ? root.dynamicColor : (root.bar ? root.bar.barForeground : Color.foreground)
+      font.family: Style.font.family
+      font.pixelSize: Style.font.icon
+      horizontalAlignment: Text.AlignHCenter
+      width: parent.width
+    }
+
+    Text {
+      text: root.activeText
+      color: (root.currentStyle === "accent_text" || root.currentStyle === "dynamic_progress" || root.isUrgentState) ? root.dynamicColor : (root.bar ? root.bar.barForeground : Color.foreground)
+      font.family: Style.font.family
+      font.pixelSize: Style.font.caption
+      horizontalAlignment: Text.AlignHCenter
+      elide: Text.ElideRight
+      width: parent.width
+    }
+  }
+
+  // -------------------------------------------------------------
+  // Horizontal Bar Presentation
   // -------------------------------------------------------------
   Item {
-    id: widgetContainer
+    id: horizontalContainer
+    visible: !root.vertical
     anchors.fill: parent
 
-    // Horizontal Layout
-    Item {
-      id: horizontalWrapper
-      visible: !root.vertical
+    // Linear Progress Track Background & Dynamic Fill
+    Rectangle {
       anchors.fill: parent
+      anchors.margins: 2
+      visible: (root.currentStyle === "progress_track" || root.currentStyle === "dynamic_progress") && root.countdownStats
+      radius: Style.cornerRadius
+      color: root.bar ? Qt.rgba(root.bar.background.r, root.bar.background.g, root.bar.background.b, 0.25) : Qt.rgba(0, 0, 0, 0.20)
+      border.width: 1
+      border.color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.15)
 
-      // Linear Progress Track Background & Dynamic Fill
       Rectangle {
-        anchors.fill: parent
-        anchors.margins: 2
-        visible: (root.currentStyle === "progress_track" || root.currentStyle === "dynamic_progress") && root.countdownStats
-        radius: Style.cornerRadius
-        color: root.bar ? Qt.rgba(root.bar.background.r, root.bar.background.g, root.bar.background.b, 0.25) : Qt.rgba(0, 0, 0, 0.20)
-        border.width: 1
-        border.color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.15)
-
-        // Progress Bar Fill (visual representation of time elapsed)
-        Rectangle {
-          anchors.left: parent.left
-          anchors.top: parent.top
-          anchors.bottom: parent.bottom
-          width: (root.countdownStats && root.countdownStats.ratioElapsed > 0)
-            ? Math.max(4, parent.width * root.countdownStats.ratioElapsed)
-            : 0
-          radius: parent.radius
-          color: {
-            if (root.currentStyle === "dynamic_progress") {
-              return Qt.rgba(root.dynamicColor.r, root.dynamicColor.g, root.dynamicColor.b, 0.35)
-            }
-            return root.bar ? Qt.rgba(root.bar.barForeground.r, root.bar.barForeground.g, root.bar.barForeground.b, 0.22) : Qt.rgba(1, 1, 1, 0.22)
+        anchors.left: parent.left
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        width: (root.countdownStats && root.countdownStats.ratioElapsed > 0)
+          ? Math.max(4, parent.width * root.countdownStats.ratioElapsed)
+          : 0
+        radius: parent.radius
+        color: {
+          if (root.currentStyle === "dynamic_progress") {
+            return Qt.rgba(root.dynamicColor.r, root.dynamicColor.g, root.dynamicColor.b, 0.35)
           }
-        }
-      }
-
-      WidgetButton {
-        id: buttonHorizontal
-        anchors.centerIn: parent
-        bar: root.bar
-        text: root.fullLabel
-        active: root.isUrgentState
-        activeColor: root.dynamicColor
-        useActiveColor: root.isUrgentState || root.currentStyle === "accent_text" || root.currentStyle === "dynamic_progress"
-        foreground: {
-          if (root.isUrgentState) {
-            return root.bar ? root.bar.urgent : Color.urgent
-          }
-          if (root.currentStyle === "accent_text" || root.currentStyle === "dynamic_progress") {
-            return root.dynamicColor
-          }
-          return root.bar ? root.bar.barForeground : Color.foreground
-        }
-        horizontalMargin: (root.currentStyle === "progress_track" || root.currentStyle === "dynamic_progress") ? 6 : 8
-        verticalPadding: 4
-        fontSize: Style.font.body
-        tooltipText: root.tooltipInfo
-
-        onPressed: function(btn) {
-          if (btn === Qt.MiddleButton) {
-            if (root.countdownList.length > 1) root.cycleNextCountdown()
-            else root.cycleFormat()
-          } else if (btn === Qt.RightButton) {
-            root.toggleDashboard()
-          } else {
-            root.toggleDashboard()
-          }
-        }
-
-        onWheelMoved: function(delta) {
-          root.handleWheel()
+          return root.bar ? Qt.rgba(root.bar.barForeground.r, root.bar.barForeground.g, root.bar.barForeground.b, 0.22) : Qt.rgba(1, 1, 1, 0.22)
         }
       }
     }
 
-    // Vertical Layout
-    Item {
-      id: verticalWrapper
-      visible: root.vertical
+    WidgetButton {
+      id: buttonHorizontal
       anchors.fill: parent
-
-      Column {
-        id: verticalColumn
-        anchors.centerIn: parent
-        spacing: 2
-
-        OpticalGlyph {
-          visible: root.activeIcon !== ""
-          width: barSize
-          height: Style.bar.iconSlot
-          text: root.activeIcon
-          fontFamily: Style.font.family
-          fontSize: Style.font.caption
-          color: (root.currentStyle === "accent_text" || root.currentStyle === "dynamic_progress" || root.isUrgentState) ? root.dynamicColor : (root.bar ? root.bar.barForeground : Color.foreground)
-        }
-
-        OpticalGlyph {
-          width: barSize
-          height: Style.bar.iconSlot
-          text: root.countdownStats ? (root.countdownStats.totalDays + "d") : "?"
-          fontFamily: Style.font.family
-          fontSize: Style.font.tiny || 9
-          color: (root.currentStyle === "accent_text" || root.currentStyle === "dynamic_progress" || root.isUrgentState) ? root.dynamicColor : (root.bar ? root.bar.barForeground : Color.foreground)
-        }
+      bar: root.bar
+      text: root.fullLabel
+      active: root.isUrgentState
+      activeColor: root.dynamicColor
+      useActiveColor: root.isUrgentState || root.currentStyle === "accent_text" || root.currentStyle === "dynamic_progress"
+      foreground: {
+        if (root.isUrgentState) return root.bar ? root.bar.urgent : Color.urgent
+        if (root.currentStyle === "accent_text" || root.currentStyle === "dynamic_progress") return root.dynamicColor
+        return root.bar ? root.bar.barForeground : Color.foreground
       }
+      horizontalMargin: (root.currentStyle === "progress_track" || root.currentStyle === "dynamic_progress") ? 6 : 8
+      verticalPadding: 4
+      fontSize: Style.font.body
+      tooltipText: root.tooltipInfo
 
       MouseArea {
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
         hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
-        onClicked: function(mouse) {
+        onPressed: (mouse) => {
           if (mouse.button === Qt.MiddleButton) {
             if (root.countdownList.length > 1) root.cycleNextCountdown()
             else root.cycleFormat()
@@ -411,583 +358,592 @@ BarWidget {
             root.toggleDashboard()
           }
         }
-        onWheel: function(wheel) {
-          root.handleWheel()
-        }
-        onEntered: if (root.bar) root.bar.showTooltip(root, root.tooltipInfo)
-        onExited: if (root.bar) root.bar.hideTooltip(root)
+        onWheel: (wheel) => root.handleWheel()
       }
     }
   }
 
   // -------------------------------------------------------------
-  // Settings Popup Card (Matching 1440 / Omarchy Standard)
+  // Settings Popup Card (Scrollable via Flickable)
   // -------------------------------------------------------------
   PopupCard {
     id: dashboardPopup
     anchorItem: root
     bar: root.bar
     contentWidth: Style.space(420)
-    contentHeight: fittedContentHeight(popupContent.implicitHeight)
+    contentHeight: dashboardPopup.fittedContentHeight(popupContent.implicitHeight, Style.space(560))
     open: false
     triggerMode: "click"
 
-    Column {
-      id: popupContent
-      width: parent.width
-      spacing: Style.spacing.md
+    Flickable {
+      id: popupFlickable
+      anchors.fill: parent
+      contentWidth: width
+      contentHeight: popupContent.implicitHeight
+      clip: true
+      boundsBehavior: Flickable.StopAtBounds
+      flickableDirection: Flickable.VerticalFlick
+      interactive: contentHeight > height
+      ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
-      // Header Row
-      Row {
-        width: parent.width
-        spacing: Style.spacing.sm
+      Column {
+        id: popupContent
+        width: popupFlickable.width
+        spacing: Style.spacing.md
 
-        Text {
-          visible: root.activeIcon !== ""
-          text: root.activeIcon
-          color: root.dynamicColor
-          font.family: Style.font.family
-          font.pixelSize: Style.font.title
-          anchors.verticalCenter: parent.verticalCenter
+        // Header Row
+        Row {
+          width: parent.width
+          spacing: Style.spacing.sm
+
+          Text {
+            visible: root.activeIcon !== ""
+            text: root.activeIcon
+            color: root.dynamicColor
+            font.family: Style.font.family
+            font.pixelSize: Style.font.title
+            anchors.verticalCenter: parent.verticalCenter
+          }
+
+          Column {
+            width: parent.width - (root.activeIcon !== "" ? Style.space(70) : Style.space(45))
+            spacing: 1
+            anchors.verticalCenter: parent.verticalCenter
+
+            Text {
+              text: "OmaCountdown"
+              color: Color.foreground
+              font.family: Style.font.family
+              font.pixelSize: Style.font.subtitle
+              font.bold: true
+            }
+
+            Text {
+              text: "Event Countdown & Multi-Target Manager"
+              color: Color.muted
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
+            }
+          }
+
+          Button {
+            iconText: "\udb80\udd56"
+            tooltipText: "Close"
+            anchors.verticalCenter: parent.verticalCenter
+            onClicked: dashboardPopup.close()
+          }
+        }
+
+        PanelSeparator { foreground: Color.foreground }
+
+        // -----------------------------------------------------------
+        // Live Hero Preview Card (Dynamic Gradient Accents)
+        // -----------------------------------------------------------
+        Rectangle {
+          width: parent.width
+          height: Style.space(74)
+          radius: Style.cornerRadius
+          color: Qt.rgba(root.dynamicColor.r, root.dynamicColor.g, root.dynamicColor.b, 0.12)
+          border.width: 1
+          border.color: Qt.rgba(root.dynamicColor.r, root.dynamicColor.g, root.dynamicColor.b, 0.40)
+
+          Column {
+            anchors.fill: parent
+            anchors.margins: Style.spacing.sm
+            spacing: 3
+
+            Row {
+              width: parent.width
+              spacing: Style.spacing.xs
+
+              Text {
+                text: (root.activeIcon !== "" ? (root.activeIcon + " ") : "") + (root.targetLabel || "Event")
+                color: Color.foreground
+                font.family: Style.font.family
+                font.pixelSize: Style.font.body
+                font.bold: true
+                elide: Text.ElideRight
+                width: parent.width - Style.space(90)
+              }
+
+              Text {
+                text: root.countdownStats ? (root.countdownStats.isPast ? "Elapsed" : "Remaining") : "—"
+                color: root.dynamicColor
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                horizontalAlignment: Text.AlignRight
+                width: Style.space(80)
+              }
+            }
+
+            Text {
+              text: root.countdownStats ? Model.formatDetailed(root.countdownStats, {
+                showYears: root.showYears,
+                showMonths: root.showMonths,
+                showDays: root.showDays,
+                showHours: root.showHours,
+                showMinutes: root.showMinutes
+              }) : "Set target date below"
+              color: root.dynamicColor
+              font.family: Style.font.family
+              font.pixelSize: Style.font.subtitle
+              font.bold: true
+              elide: Text.ElideRight
+              width: parent.width
+            }
+
+            // Progress bar
+            Rectangle {
+              width: parent.width
+              height: 4
+              radius: 2
+              color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.15)
+
+              Rectangle {
+                height: parent.height
+                radius: parent.radius
+                width: Math.max(0, parent.width * (root.countdownStats ? root.countdownStats.ratioElapsed : 0))
+                color: root.dynamicColor
+              }
+            }
+          }
+        }
+
+        // -----------------------------------------------------------
+        // Multi-Countdown Events Selector
+        // -----------------------------------------------------------
+        PanelSectionHeader {
+          text: "COUNTDOWN EVENTS"
+          foreground: Color.foreground
+        }
+
+        Flow {
+          width: parent.width
+          spacing: Style.spacing.xs
+
+          Repeater {
+            model: root.countdownList
+            delegate: Button {
+              property bool isSelected: index === root.activeEventIndex
+              text: (modelData.iconStyle !== "none" ? (Model.getIcon(modelData.iconStyle, modelData.customEmoji) + " ") : "") + (modelData.title || ("Event " + (index + 1)))
+              active: isSelected
+              selected: isSelected
+              accent: root.dynamicColor
+              foreground: isSelected ? root.dynamicColor : Color.foreground
+              onClicked: root.selectEvent(index)
+            }
+          }
+
+          Button {
+            text: "+ Add"
+            tooltipText: "Create a new countdown target"
+            onClicked: root.addNewEvent()
+          }
+
+          Button {
+            visible: root.countdownList.length > 1
+            iconText: "\uf014"
+            tooltipText: "Delete selected countdown"
+            onClicked: root.deleteActiveEvent()
+          }
+        }
+
+        // -----------------------------------------------------------
+        // Target Event Configuration (Focus-Safe Inputs)
+        // -----------------------------------------------------------
+        PanelSectionHeader {
+          text: "EVENT DETAILS"
+          foreground: Color.foreground
         }
 
         Column {
-          width: parent.width - (root.activeIcon !== "" ? Style.space(70) : Style.space(45))
-          spacing: 1
-          anchors.verticalCenter: parent.verticalCenter
+          width: parent.width
+          spacing: Style.spacing.xs
 
-          Text {
-            text: "OmaCountdown"
-            color: Color.foreground
-            font.family: Style.font.family
-            font.pixelSize: Style.font.subtitle
-            font.bold: true
+          Row {
+            width: parent.width
+            spacing: Style.spacing.sm
+
+            Text {
+              text: "Title:"
+              color: Color.foreground
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
+              width: Style.space(45)
+              anchors.verticalCenter: parent.verticalCenter
+            }
+
+            TextField {
+              id: titleInput
+              width: parent.width - Style.space(55)
+              placeholderText: "Event title (e.g. NEET PG, Vacation)"
+              text: root.rawEventTitle
+              onTextEdited: root.updateActiveEvent("title", text)
+
+              Binding {
+                target: titleInput
+                property: "text"
+                value: root.rawEventTitle
+                when: !titleInput.activeFocus
+              }
+            }
           }
 
-          Text {
-            text: "Event Countdown & Multi-Target Manager"
-            color: Color.muted
-            font.family: Style.font.family
-            font.pixelSize: Style.font.caption
+          Row {
+            width: parent.width
+            spacing: Style.spacing.sm
+
+            Text {
+              text: "Date:"
+              color: Color.foreground
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
+              width: Style.space(45)
+              anchors.verticalCenter: parent.verticalCenter
+            }
+
+            TextField {
+              id: dateInput
+              width: parent.width - Style.space(55)
+              placeholderText: "e.g. 01/08/2027, 1-8-2027, 1 Aug 2027, +30d"
+              text: root.rawTargetDate
+              onTextEdited: root.updateActiveEvent("targetDate", text)
+
+              Binding {
+                target: dateInput
+                property: "text"
+                value: root.rawTargetDate
+                when: !dateInput.activeFocus
+              }
+            }
+          }
+
+          // Quick Presets Row (Outputs in clean DD/MM/YYYY)
+          Row {
+            width: parent.width
+            spacing: Style.spacing.xs
+
+            Button {
+              text: "+1D"
+              tooltipText: "Set target date to tomorrow"
+              width: (parent.width - Style.spacing.xs * 5) / 6
+              onClicked: root.applyPreset("+1d")
+            }
+            Button {
+              text: "+1W"
+              tooltipText: "Set target date to 1 week ahead"
+              width: (parent.width - Style.spacing.xs * 5) / 6
+              onClicked: root.applyPreset("+1w")
+            }
+            Button {
+              text: "+1M"
+              tooltipText: "Set target date to 1 month ahead"
+              width: (parent.width - Style.spacing.xs * 5) / 6
+              onClicked: root.applyPreset("+1m")
+            }
+            Button {
+              text: "+1Y"
+              tooltipText: "Set target date to 1 year ahead"
+              width: (parent.width - Style.spacing.xs * 5) / 6
+              onClicked: root.applyPreset("+1y")
+            }
+            Button {
+              text: "Month"
+              tooltipText: "End of current month"
+              width: (parent.width - Style.spacing.xs * 5) / 6
+              onClicked: root.applyPreset("end_month")
+            }
+            Button {
+              text: "Year"
+              tooltipText: "End of current year (Dec 31)"
+              width: (parent.width - Style.spacing.xs * 5) / 6
+              onClicked: root.applyPreset("end_year")
+            }
           }
         }
 
-        Button {
-          iconText: "\udb80\udd56"
-          tooltipText: "Close"
-          anchors.verticalCenter: parent.verticalCenter
-          onClicked: dashboardPopup.close()
+        // -----------------------------------------------------------
+        // Compact Display Units Configuration (Single Sleek Row)
+        // -----------------------------------------------------------
+        PanelSectionHeader {
+          text: "DISPLAY UNITS"
+          foreground: Color.foreground
         }
-      }
 
-      PanelSeparator { foreground: Color.foreground }
+        Row {
+          width: parent.width
+          spacing: Style.spacing.xs
 
-      // -----------------------------------------------------------
-      // Live Hero Preview Card (Dynamic Gradient Accents)
-      // -----------------------------------------------------------
-      Rectangle {
-        width: parent.width
-        height: Style.space(74)
-        radius: Style.cornerRadius
-        color: Qt.rgba(root.dynamicColor.r, root.dynamicColor.g, root.dynamicColor.b, 0.12)
-        border.width: 1
-        border.color: Qt.rgba(root.dynamicColor.r, root.dynamicColor.g, root.dynamicColor.b, 0.40)
+          Button {
+            text: root.showYears ? "\uf00c Years" : "Years"
+            tooltipText: "Toggle years in countdown"
+            width: (parent.width - Style.spacing.xs * 4) / 5
+            onClicked: root.updateSetting("showYears", !root.showYears)
+          }
+          Button {
+            text: root.showMonths ? "\uf00c Months" : "Months"
+            tooltipText: "Toggle months in countdown"
+            width: (parent.width - Style.spacing.xs * 4) / 5
+            onClicked: root.updateSetting("showMonths", !root.showMonths)
+          }
+          Button {
+            text: root.showDays ? "\uf00c Days" : "Days"
+            tooltipText: "Toggle days in countdown"
+            width: (parent.width - Style.spacing.xs * 4) / 5
+            onClicked: root.updateSetting("showDays", !root.showDays)
+          }
+          Button {
+            text: root.showHours ? "\uf00c Hours" : "Hours"
+            tooltipText: "Toggle hours in countdown"
+            width: (parent.width - Style.spacing.xs * 4) / 5
+            onClicked: root.updateSetting("showHours", !root.showHours)
+          }
+          Button {
+            text: root.showMinutes ? "\uf00c Mins" : "Mins"
+            tooltipText: "Toggle minutes in countdown"
+            width: (parent.width - Style.spacing.xs * 4) / 5
+            onClicked: root.updateSetting("showMinutes", !root.showMinutes)
+          }
+        }
+
+        // -----------------------------------------------------------
+        // Display Format Style
+        // -----------------------------------------------------------
+        PanelSectionHeader {
+          text: "FORMAT STYLE"
+          foreground: Color.foreground
+        }
+
+        ButtonGroup {
+          width: parent.width
+          spacing: Style.spacing.xs
+          options: [
+            { value: "auto", label: "Auto", tooltip: "Smart adaptive units" },
+            { value: "full", label: "Full", tooltip: "All enabled units (e.g. 1y 2mo 15d 4h 30m)" },
+            { value: "compact", label: "Compact", tooltip: "Top 2 units only (e.g. 1y 2mo)" },
+            { value: "days_only", label: "Days", tooltip: "Total days (e.g. 441d)" },
+            { value: "percentage", label: "%", tooltip: "Progress percentage" }
+          ]
+          value: root.currentFormat
+          onChanged: function(val) { root.updateSetting("format", val) }
+        }
+
+        // -----------------------------------------------------------
+        // Icons Section (Clean, Consistent, No Redundant Buttons)
+        // -----------------------------------------------------------
+        PanelSectionHeader {
+          text: "ICONS"
+          foreground: Color.foreground
+        }
 
         Column {
-          anchors.fill: parent
-          anchors.margins: Style.spacing.sm
-          spacing: 3
+          width: parent.width
+          spacing: Style.spacing.xs
+
+          // Icon Row 1
+          ButtonGroup {
+            width: parent.width
+            spacing: Style.spacing.xs
+            options: [
+              { value: "medical", label: "\uf0f1 Med", tooltip: "Stethoscope / Medical" },
+              { value: "clock", label: "\uf017 Clock", tooltip: "Clock timer" },
+              { value: "hourglass", label: "\uf252 Glass", tooltip: "Hourglass" },
+              { value: "calendar", label: "\uf073 Cal", tooltip: "Calendar event" }
+            ]
+            value: (root.currentIconStyle === "medical" || root.currentIconStyle === "clock" || root.currentIconStyle === "hourglass" || root.currentIconStyle === "calendar") ? root.currentIconStyle : ""
+            onChanged: function(val) { root.updateActiveEvent("iconStyle", val) }
+          }
+
+          // Icon Row 2
+          ButtonGroup {
+            width: parent.width
+            spacing: Style.spacing.xs
+            options: [
+              { value: "target", label: "\uf140 Target", tooltip: "Goal target" },
+              { value: "grad", label: "\uf19d Grad", tooltip: "Graduation / Exam" },
+              { value: "book", label: "\uf02d Book", tooltip: "Study / Preparation" },
+              { value: "star", label: "\uf005 Star", tooltip: "Milestone star" }
+            ]
+            value: (root.currentIconStyle === "target" || root.currentIconStyle === "grad" || root.currentIconStyle === "book" || root.currentIconStyle === "star") ? root.currentIconStyle : ""
+            onChanged: function(val) { root.updateActiveEvent("iconStyle", val) }
+          }
+
+          // Icon Row 3
+          ButtonGroup {
+            width: parent.width
+            spacing: Style.spacing.xs
+            options: [
+              { value: "plane", label: "\uf072 Trip", tooltip: "Vacation / Travel" },
+              { value: "heart", label: "\uf004 Heart", tooltip: "Anniversary / Life" },
+              { value: "bolt", label: "\uf0e7 Bolt", tooltip: "Rush / High priority" },
+              { value: "none", label: "Off", tooltip: "No icon" }
+            ]
+            value: (root.currentIconStyle === "plane" || root.currentIconStyle === "heart" || root.currentIconStyle === "bolt" || root.currentIconStyle === "none") ? root.currentIconStyle : ""
+            onChanged: function(val) { root.updateActiveEvent("iconStyle", val) }
+          }
+
+          // Row 4: Custom Icon Option
+          Row {
+            width: parent.width
+            spacing: Style.spacing.xs
+
+            Button {
+              text: root.currentIconStyle === "custom" ? "\uf00c Custom Icon" : "Custom Icon"
+              tooltipText: "Enter custom Nerd Font glyph or text"
+              width: parent.width
+              active: root.currentIconStyle === "custom"
+              selected: root.currentIconStyle === "custom"
+              accent: root.dynamicColor
+              onClicked: root.updateActiveEvent("iconStyle", "custom")
+            }
+          }
+
+          // Custom Icon Input
+          Row {
+            width: parent.width
+            spacing: Style.spacing.sm
+            visible: root.currentIconStyle === "custom"
+
+            Text {
+              text: "Icon:"
+              color: Color.foreground
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
+              width: Style.space(45)
+              anchors.verticalCenter: parent.verticalCenter
+            }
+
+            TextField {
+              id: customIconInput
+              width: parent.width - Style.space(55)
+              placeholderText: "Enter glyph (e.g. \\uf0f1 or text)"
+              text: root.customEmoji
+              onTextEdited: root.updateActiveEvent("customEmoji", text)
+
+              Binding {
+                target: customIconInput
+                property: "text"
+                value: root.customEmoji
+                when: !customIconInput.activeFocus
+              }
+            }
+          }
+        }
+
+        // -----------------------------------------------------------
+        // Presentation Styles (2x2 Grid - Zero Truncation)
+        // -----------------------------------------------------------
+        PanelSectionHeader {
+          text: "PRESENTATION STYLE"
+          foreground: Color.foreground
+        }
+
+        Column {
+          width: parent.width
+          spacing: Style.spacing.xs
 
           Row {
             width: parent.width
             spacing: Style.spacing.xs
 
-            Text {
-              text: (root.activeIcon !== "" ? (root.activeIcon + " ") : "") + (root.targetLabel || "Event")
-              color: Color.foreground
-              font.family: Style.font.family
-              font.pixelSize: Style.font.body
-              font.bold: true
-              elide: Text.ElideRight
-              width: parent.width - Style.space(90)
+            Button {
+              text: "Ghost"
+              tooltipText: "Plain text with standard foreground color"
+              width: (parent.width - Style.spacing.xs) / 2
+              active: root.currentStyle === "ghost"
+              selected: root.currentStyle === "ghost"
+              accent: root.dynamicColor
+              onClicked: root.updateSetting("style", "ghost")
             }
 
-            Text {
-              text: root.countdownStats ? (root.countdownStats.isPast ? "Elapsed" : "Remaining") : "—"
-              color: root.dynamicColor
-              font.family: Style.font.family
-              font.pixelSize: Style.font.caption
-              font.bold: true
-              horizontalAlignment: Text.AlignRight
-              width: Style.space(80)
+            Button {
+              text: "Accent Text"
+              tooltipText: "Text colored with dynamic timeline gradient"
+              width: (parent.width - Style.spacing.xs) / 2
+              active: root.currentStyle === "accent_text"
+              selected: root.currentStyle === "accent_text"
+              accent: root.dynamicColor
+              onClicked: root.updateSetting("style", "accent_text")
             }
           }
 
-          Text {
-            text: root.countdownStats ? Model.formatDetailed(root.countdownStats, {
-              showYears: root.showYears,
-              showMonths: root.showMonths,
-              showDays: root.showDays,
-              showHours: root.showHours,
-              showMinutes: root.showMinutes
-            }) : "Set target date below"
-            color: root.dynamicColor
-            font.family: Style.font.family
-            font.pixelSize: Style.font.subtitle
-            font.bold: true
-            elide: Text.ElideRight
+          Row {
             width: parent.width
+            spacing: Style.spacing.xs
+
+            Button {
+              text: "Linear Progress"
+              tooltipText: "Progress track fill with standard foreground text"
+              width: (parent.width - Style.spacing.xs) / 2
+              active: root.currentStyle === "progress_track"
+              selected: root.currentStyle === "progress_track"
+              accent: root.dynamicColor
+              onClicked: root.updateSetting("style", "progress_track")
+            }
+
+            Button {
+              text: "Dynamic Progress"
+              tooltipText: "Both text and progress track in dynamic gradient color"
+              width: (parent.width - Style.spacing.xs) / 2
+              active: root.currentStyle === "dynamic_progress"
+              selected: root.currentStyle === "dynamic_progress"
+              accent: root.dynamicColor
+              onClicked: root.updateSetting("style", "dynamic_progress")
+            }
           }
 
-          // Progress bar
-          Rectangle {
+          Toggle {
             width: parent.width
-            height: 4
-            radius: 2
-            color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.15)
-
-            Rectangle {
-              height: parent.height
-              radius: parent.radius
-              width: Math.max(0, parent.width * (root.countdownStats ? root.countdownStats.ratioElapsed : 0))
-              color: root.dynamicColor
-            }
-          }
-        }
-      }
-
-      // -----------------------------------------------------------
-      // Multi-Countdown Events Selector
-      // -----------------------------------------------------------
-      PanelSectionHeader {
-        text: "COUNTDOWN EVENTS"
-        foreground: Color.foreground
-      }
-
-      Flow {
-        width: parent.width
-        spacing: Style.spacing.xs
-
-        Repeater {
-          model: root.countdownList
-          delegate: Button {
-            property bool isSelected: index === root.activeEventIndex
-            text: (modelData.iconStyle !== "none" ? (Model.getIcon(modelData.iconStyle, modelData.customEmoji) + " ") : "") + (modelData.title || ("Event " + (index + 1)))
-            active: isSelected
-            selected: isSelected
-            accent: root.dynamicColor
-            foreground: isSelected ? root.dynamicColor : Color.foreground
-            onClicked: root.selectEvent(index)
+            label: "Show Title on Bar"
+            description: "Prefix counter with event title"
+            checked: root.showLabel
+            onClicked: root.updateSetting("showLabel", !root.showLabel)
           }
         }
 
-        Button {
-          text: "+ Add"
-          tooltipText: "Create a new countdown target"
-          onClicked: root.addNewEvent()
+        // -----------------------------------------------------------
+        // Bar Position
+        // -----------------------------------------------------------
+        PanelSectionHeader {
+          text: "BAR POSITION"
+          foreground: Color.foreground
         }
 
-        Button {
-          visible: root.countdownList.length > 1
-          iconText: "\uf014"
-          tooltipText: "Delete selected countdown"
-          onClicked: root.deleteActiveEvent()
-        }
-      }
-
-      // -----------------------------------------------------------
-      // Target Event Configuration
-      // -----------------------------------------------------------
-      PanelSectionHeader {
-        text: "EVENT DETAILS"
-        foreground: Color.foreground
-      }
-
-      Column {
-        width: parent.width
-        spacing: Style.spacing.xs
-
-        Row {
-          width: parent.width
-          spacing: Style.spacing.sm
-
-          Text {
-            text: "Title:"
-            color: Color.foreground
-            font.family: Style.font.family
-            font.pixelSize: Style.font.caption
-            width: Style.space(45)
-            anchors.verticalCenter: parent.verticalCenter
-          }
-
-          TextField {
-            width: parent.width - Style.space(55)
-            placeholderText: "e.g. NEET PG, Project Launch"
-            text: root.targetLabel
-            onTextChanged: root.updateActiveEvent("title", text)
-          }
-        }
-
-        Row {
-          width: parent.width
-          spacing: Style.spacing.sm
-
-          Text {
-            text: "Date:"
-            color: Color.foreground
-            font.family: Style.font.family
-            font.pixelSize: Style.font.caption
-            width: Style.space(45)
-            anchors.verticalCenter: parent.verticalCenter
-          }
-
-          TextField {
-            id: dateField
-            width: (parent.width - Style.space(55) - Style.spacing.sm) * 0.60
-            placeholderText: "YYYY-MM-DD"
-            text: root.targetDate
-            onTextChanged: {
-              if (Model.isValidDate(text) || text === "") {
-                root.updateActiveEvent("targetDate", text)
-              }
-            }
-          }
-
-          Text {
-            text: "Time:"
-            color: Color.foreground
-            font.family: Style.font.family
-            font.pixelSize: Style.font.caption
-            width: Style.space(35)
-            anchors.verticalCenter: parent.verticalCenter
-          }
-
-          TextField {
-            width: (parent.width - Style.space(55) - Style.spacing.sm) * 0.40 - Style.space(35)
-            placeholderText: "00:00"
-            text: root.targetTime
-            onTextChanged: {
-              if (Model.isValidTime(text)) {
-                root.updateActiveEvent("targetTime", text)
-              }
-            }
-          }
-        }
-
-        // Quick Presets Row
-        Row {
-          width: parent.width
-          spacing: Style.spacing.xs
-
-          Button {
-            text: "+1D"
-            tooltipText: "Set target date to tomorrow"
-            width: (parent.width - Style.spacing.xs * 5) / 6
-            onClicked: root.applyPreset("+1d")
-          }
-          Button {
-            text: "+1W"
-            tooltipText: "Set target date to 1 week ahead"
-            width: (parent.width - Style.spacing.xs * 5) / 6
-            onClicked: root.applyPreset("+1w")
-          }
-          Button {
-            text: "+1M"
-            tooltipText: "Set target date to 1 month ahead"
-            width: (parent.width - Style.spacing.xs * 5) / 6
-            onClicked: root.applyPreset("+1m")
-          }
-          Button {
-            text: "+1Y"
-            tooltipText: "Set target date to 1 year ahead"
-            width: (parent.width - Style.spacing.xs * 5) / 6
-            onClicked: root.applyPreset("+1y")
-          }
-          Button {
-            text: "Month"
-            tooltipText: "End of current month"
-            width: (parent.width - Style.spacing.xs * 5) / 6
-            onClicked: root.applyPreset("end_month")
-          }
-          Button {
-            text: "Year"
-            tooltipText: "End of current year (Dec 31)"
-            width: (parent.width - Style.spacing.xs * 5) / 6
-            onClicked: root.applyPreset("end_year")
-          }
-        }
-      }
-
-      // -----------------------------------------------------------
-      // Compact Display Units Configuration (Single Sleek Row)
-      // -----------------------------------------------------------
-      PanelSectionHeader {
-        text: "DISPLAY UNITS"
-        foreground: Color.foreground
-      }
-
-      Row {
-        width: parent.width
-        spacing: Style.spacing.xs
-
-        Button {
-          text: root.showYears ? "\uf00c Years" : "Years"
-          tooltipText: "Toggle years in countdown"
-          width: (parent.width - Style.spacing.xs * 4) / 5
-          onClicked: root.updateSetting("showYears", !root.showYears)
-        }
-        Button {
-          text: root.showMonths ? "\uf00c Months" : "Months"
-          tooltipText: "Toggle months in countdown"
-          width: (parent.width - Style.spacing.xs * 4) / 5
-          onClicked: root.updateSetting("showMonths", !root.showMonths)
-        }
-        Button {
-          text: root.showDays ? "\uf00c Days" : "Days"
-          tooltipText: "Toggle days in countdown"
-          width: (parent.width - Style.spacing.xs * 4) / 5
-          onClicked: root.updateSetting("showDays", !root.showDays)
-        }
-        Button {
-          text: root.showHours ? "\uf00c Hours" : "Hours"
-          tooltipText: "Toggle hours in countdown"
-          width: (parent.width - Style.spacing.xs * 4) / 5
-          onClicked: root.updateSetting("showHours", !root.showHours)
-        }
-        Button {
-          text: root.showMinutes ? "\uf00c Mins" : "Mins"
-          tooltipText: "Toggle minutes in countdown"
-          width: (parent.width - Style.spacing.xs * 4) / 5
-          onClicked: root.updateSetting("showMinutes", !root.showMinutes)
-        }
-      }
-
-      // -----------------------------------------------------------
-      // Display Format Style
-      // -----------------------------------------------------------
-      PanelSectionHeader {
-        text: "FORMAT STYLE"
-        foreground: Color.foreground
-      }
-
-      ButtonGroup {
-        width: parent.width
-        spacing: Style.spacing.xs
-        options: [
-          { value: "auto", label: "Auto", tooltip: "Smart adaptive units" },
-          { value: "full", label: "Full", tooltip: "All enabled units (e.g. 1y 2mo 15d 4h 30m)" },
-          { value: "compact", label: "Compact", tooltip: "Top 2 units only (e.g. 1y 2mo)" },
-          { value: "days_only", label: "Days", tooltip: "Total days (e.g. 441d)" },
-          { value: "percentage", label: "%", tooltip: "Progress percentage" }
-        ]
-        value: root.currentFormat
-        onChanged: function(val) { root.updateSetting("format", val) }
-      }
-
-      // -----------------------------------------------------------
-      // Icons Section (Clean, Consistent, No Redundant Buttons)
-      // -----------------------------------------------------------
-      PanelSectionHeader {
-        text: "ICONS"
-        foreground: Color.foreground
-      }
-
-      Column {
-        width: parent.width
-        spacing: Style.spacing.xs
-
-        // Icon Row 1
         ButtonGroup {
           width: parent.width
           spacing: Style.spacing.xs
           options: [
-            { value: "medical", label: "\uf0f1 Med", tooltip: "Stethoscope / Medical" },
-            { value: "clock", label: "\uf017 Clock", tooltip: "Clock timer" },
-            { value: "hourglass", label: "\uf252 Glass", tooltip: "Hourglass" },
-            { value: "calendar", label: "\uf073 Cal", tooltip: "Calendar event" }
+            { value: "left", label: "Left", tooltip: "Place widget in left section" },
+            { value: "center", label: "Center", tooltip: "Place widget in center section" },
+            { value: "right", label: "Right", tooltip: "Place widget in right section" }
           ]
-          value: (root.currentIconStyle === "medical" || root.currentIconStyle === "clock" || root.currentIconStyle === "hourglass" || root.currentIconStyle === "calendar") ? root.currentIconStyle : ""
-          onChanged: function(val) { root.updateActiveEvent("iconStyle", val) }
+          value: root.currentBarSection
+          onChanged: function(val) { root.moveToSection(val) }
         }
 
-        // Icon Row 2
-        ButtonGroup {
-          width: parent.width
-          spacing: Style.spacing.xs
-          options: [
-            { value: "target", label: "\uf140 Target", tooltip: "Goal target" },
-            { value: "grad", label: "\uf19d Grad", tooltip: "Graduation / Exam" },
-            { value: "book", label: "\uf02d Book", tooltip: "Study / Preparation" },
-            { value: "star", label: "\uf005 Star", tooltip: "Milestone star" }
-          ]
-          value: (root.currentIconStyle === "target" || root.currentIconStyle === "grad" || root.currentIconStyle === "book" || root.currentIconStyle === "star") ? root.currentIconStyle : ""
-          onChanged: function(val) { root.updateActiveEvent("iconStyle", val) }
+        // -----------------------------------------------------------
+        // Preferences & Dynamic Features
+        // -----------------------------------------------------------
+        PanelSectionHeader {
+          text: "PREFERENCES"
+          foreground: Color.foreground
         }
 
-        // Icon Row 3
-        ButtonGroup {
-          width: parent.width
-          spacing: Style.spacing.xs
-          options: [
-            { value: "plane", label: "\uf072 Trip", tooltip: "Vacation / Travel" },
-            { value: "heart", label: "\uf004 Heart", tooltip: "Anniversary / Life" },
-            { value: "bolt", label: "\uf0e7 Bolt", tooltip: "Rush / High priority" },
-            { value: "none", label: "Off", tooltip: "No icon" }
-          ]
-          value: (root.currentIconStyle === "plane" || root.currentIconStyle === "heart" || root.currentIconStyle === "bolt" || root.currentIconStyle === "none") ? root.currentIconStyle : ""
-          onChanged: function(val) { root.updateActiveEvent("iconStyle", val) }
-        }
-
-        // Row 4: Custom Icon Option
-        Row {
+        Column {
           width: parent.width
           spacing: Style.spacing.xs
 
-          Button {
-            text: root.currentIconStyle === "custom" ? "\uf00c Custom Icon" : "Custom Icon"
-            tooltipText: "Enter custom Nerd Font glyph or text"
+          Toggle {
             width: parent.width
-            onClicked: root.updateActiveEvent("iconStyle", "custom")
+            label: "Dynamic Timeline Gradient"
+            description: "Smoothly shifts color from Green to Red as deadline nears"
+            checked: root.currentGradientColor
+            onClicked: root.updateSetting("gradientColor", !root.currentGradientColor)
           }
-        }
-
-        // Custom Icon Input
-        Row {
-          width: parent.width
-          spacing: Style.spacing.sm
-          visible: root.currentIconStyle === "custom"
-
-          Text {
-            text: "Icon:"
-            color: Color.foreground
-            font.family: Style.font.family
-            font.pixelSize: Style.font.caption
-            width: Style.space(45)
-            anchors.verticalCenter: parent.verticalCenter
-          }
-
-          TextField {
-            width: parent.width - Style.space(55)
-            placeholderText: "Enter glyph (e.g. \\uf0f1 or text)"
-            text: root.customEmoji
-            onTextChanged: root.updateActiveEvent("customEmoji", text)
-          }
-        }
-      }
-
-      // -----------------------------------------------------------
-      // Presentation Styles (2x2 Grid - Zero Truncation)
-      // -----------------------------------------------------------
-      PanelSectionHeader {
-        text: "PRESENTATION STYLE"
-        foreground: Color.foreground
-      }
-
-      Column {
-        width: parent.width
-        spacing: Style.spacing.xs
-
-        Row {
-          width: parent.width
-          spacing: Style.spacing.xs
-
-          Button {
-            text: "Ghost"
-            tooltipText: "Plain text with standard foreground color"
-            width: (parent.width - Style.spacing.xs) / 2
-            active: root.currentStyle === "ghost"
-            selected: root.currentStyle === "ghost"
-            accent: root.dynamicColor
-            onClicked: root.updateSetting("style", "ghost")
-          }
-
-          Button {
-            text: "Accent Text"
-            tooltipText: "Text colored with dynamic timeline gradient"
-            width: (parent.width - Style.spacing.xs) / 2
-            active: root.currentStyle === "accent_text"
-            selected: root.currentStyle === "accent_text"
-            accent: root.dynamicColor
-            onClicked: root.updateSetting("style", "accent_text")
-          }
-        }
-
-        Row {
-          width: parent.width
-          spacing: Style.spacing.xs
-
-          Button {
-            text: "Linear Progress"
-            tooltipText: "Progress track fill with standard foreground text"
-            width: (parent.width - Style.spacing.xs) / 2
-            active: root.currentStyle === "progress_track"
-            selected: root.currentStyle === "progress_track"
-            accent: root.dynamicColor
-            onClicked: root.updateSetting("style", "progress_track")
-          }
-
-          Button {
-            text: "Dynamic Progress"
-            tooltipText: "Both text and progress track in dynamic gradient color"
-            width: (parent.width - Style.spacing.xs) / 2
-            active: root.currentStyle === "dynamic_progress"
-            selected: root.currentStyle === "dynamic_progress"
-            accent: root.dynamicColor
-            onClicked: root.updateSetting("style", "dynamic_progress")
-          }
-        }
-
-        Toggle {
-          width: parent.width
-          label: "Show Title on Bar"
-          description: "Prefix counter with event title"
-          checked: root.showLabel
-          onClicked: root.updateSetting("showLabel", !root.showLabel)
-        }
-      }
-
-      // -----------------------------------------------------------
-      // Bar Position
-      // -----------------------------------------------------------
-      PanelSectionHeader {
-        text: "BAR POSITION"
-        foreground: Color.foreground
-      }
-
-      ButtonGroup {
-        width: parent.width
-        spacing: Style.spacing.xs
-        options: [
-          { value: "left", label: "Left", tooltip: "Place widget in left section" },
-          { value: "center", label: "Center", tooltip: "Place widget in center section" },
-          { value: "right", label: "Right", tooltip: "Place widget in right section" }
-        ]
-        value: root.currentBarSection
-        onChanged: function(val) { root.moveToSection(val) }
-      }
-
-      // -----------------------------------------------------------
-      // Preferences & Dynamic Features
-      // -----------------------------------------------------------
-      PanelSectionHeader {
-        text: "PREFERENCES"
-        foreground: Color.foreground
-      }
-
-      Column {
-        width: parent.width
-        spacing: Style.spacing.xs
-
-        Toggle {
-          width: parent.width
-          label: "Dynamic Timeline Gradient"
-          description: "Smoothly shifts color from Green to Red as deadline nears"
-          checked: root.currentGradientColor
-          onClicked: root.updateSetting("gradientColor", !root.currentGradientColor)
         }
       }
     }
   }
 }
-
 

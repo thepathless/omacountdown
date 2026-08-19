@@ -1,6 +1,23 @@
 // Model.js - Core calendar math, unit breakdown, formatters, and presets for OmaCountdown
 .pragma library
 
+var MONTH_NAMES = {
+  "jan": 0, "january": 0,
+  "feb": 1, "february": 1,
+  "mar": 2, "march": 2,
+  "apr": 3, "april": 3,
+  "may": 4,
+  "jun": 5, "june": 5,
+  "jul": 6, "july": 6,
+  "aug": 7, "august": 7,
+  "sep": 8, "sept": 8, "september": 8,
+  "oct": 9, "october": 9,
+  "nov": 10, "november": 10,
+  "dec": 11, "december": 11
+};
+
+var SHORT_MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
 /**
  * Ensures countdowns array exists in settings with valid schema.
  * Migrates legacy single-event properties if countdowns array is empty.
@@ -11,7 +28,6 @@ function ensureCountdowns(settings) {
       id: "evt_default",
       title: "Event",
       targetDate: "",
-      targetTime: "00:00",
       startDate: new Date().toISOString(),
       iconStyle: "medical",
       customEmoji: "\uf0f1"
@@ -24,9 +40,8 @@ function ensureCountdowns(settings) {
 
   return [{
     id: "evt_1",
-    title: settings.targetLabel || "Event",
+    title: (settings && settings.targetLabel !== undefined) ? settings.targetLabel : "Event",
     targetDate: settings.targetDate || "",
-    targetTime: settings.targetTime || "00:00",
     startDate: settings.startDate || new Date().toISOString(),
     iconStyle: settings.iconStyle || "medical",
     customEmoji: settings.customEmoji || "\uf0f1"
@@ -54,19 +69,18 @@ function getActiveIndex(settings) {
 }
 
 /**
- * Creates a new blank countdown event with a 7-day default target.
+ * Creates a new blank countdown event with a 7-day default target in DD/MM/YYYY.
  */
 function createNewEvent(title) {
   var d = new Date();
   d.setDate(d.getDate() + 7);
   var pad = function(n) { return n < 10 ? "0" + n : String(n); };
-  var dateStr = d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+  var dateStr = pad(d.getDate()) + "/" + pad(d.getMonth() + 1) + "/" + d.getFullYear();
 
   return {
     id: "evt_" + Date.now(),
     title: title || "New Event",
     targetDate: dateStr,
-    targetTime: "00:00",
     startDate: new Date().toISOString(),
     iconStyle: "calendar",
     customEmoji: ""
@@ -77,7 +91,6 @@ function createNewEvent(title) {
  * Safely adds N months to a date without overflowing past month boundaries (e.g. Jan 31 -> Feb 28).
  */
 function addMonthsSafe(date, n) {
-
   var d = date.getDate();
   var y = date.getFullYear();
   var m = date.getMonth() + n;
@@ -99,51 +112,211 @@ function addYearsSafe(date, n) {
 }
 
 /**
- * Parses target date and time strings into a local Date object.
- * Defaults to 7 days ahead if targetDateStr is empty or invalid.
+ * Helper to construct and validate local Date object at 00:00:00.
  */
-function parseTargetDate(targetDateStr, targetTimeStr, now) {
-  var base = now instanceof Date ? now : new Date();
+function createValidDate(y, m, d) {
+  if (m < 0 || m > 11 || d < 1 || d > 31) return null;
+  var target = new Date(y, m, d, 0, 0, 0);
+  if (isNaN(target.getTime())) return null;
+  if (target.getFullYear() !== y || target.getMonth() !== m || target.getDate() !== d) return null;
+  return target;
+}
 
-  if (!targetDateStr || targetDateStr.trim() === "") {
+/**
+ * Universal flexible date parser.
+ * Parses Day/Month/Year (DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY), ISO (YYYY-MM-DD),
+ * Named Month strings ("1 Aug 2027", "Aug 1 2027"), and relative keywords ("tomorrow", "+30d", "next week").
+ */
+function parseTargetDate(inputStr, now) {
+  var base = now instanceof Date ? new Date(now.getTime()) : new Date();
+  base.setHours(0, 0, 0, 0);
+
+  if (!inputStr || typeof inputStr !== "string" || inputStr.trim() === "") {
     var def = new Date(base.getTime());
     def.setDate(def.getDate() + 7);
-    def.setHours(0, 0, 0, 0);
     return def;
   }
 
-  var dMatch = targetDateStr.trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (!dMatch) return null;
+  var s = inputStr.trim().toLowerCase();
 
-  var y = parseInt(dMatch[1], 10);
-  var m = parseInt(dMatch[2], 10) - 1;
-  var d = parseInt(dMatch[3], 10);
+  // 1. Relative keyword shortcuts
+  if (s === "tomorrow" || s === "+1d") {
+    var d = new Date(base.getTime()); d.setDate(d.getDate() + 1); return d;
+  }
+  if (s === "next week" || s === "+1w") {
+    var d = new Date(base.getTime()); d.setDate(d.getDate() + 7); return d;
+  }
+  if (s === "next month" || s === "+1m") {
+    return addMonthsSafe(base, 1);
+  }
+  if (s === "next year" || s === "+1y") {
+    return addYearsSafe(base, 1);
+  }
+  if (s === "end_month" || s === "end of month" || s === "end month") {
+    return new Date(base.getFullYear(), base.getMonth() + 1, 0, 0, 0, 0);
+  }
+  if (s === "end_year" || s === "end of year" || s === "end year") {
+    return new Date(base.getFullYear(), 11, 31, 0, 0, 0);
+  }
 
-  var h = 0;
-  var min = 0;
-  var sec = 0;
-
-  if (targetTimeStr && targetTimeStr.trim() !== "") {
-    var tMatch = targetTimeStr.trim().match(/^(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?$/);
-    if (tMatch) {
-      h = parseInt(tMatch[1], 10);
-      min = parseInt(tMatch[2], 10);
-      if (tMatch[3]) sec = parseInt(tMatch[3], 10);
+  // 2. Relative offsets: +10d, 10 days, in 30 days, +2w, +3m, +1y
+  var relMatch = s.match(/^(?:\+|\bin\s+)?(\d+)\s*(d|day|days|w|week|weeks|m|mo|month|months|y|yr|year|years)$/);
+  if (relMatch) {
+    var count = parseInt(relMatch[1], 10);
+    var unit = relMatch[2];
+    if (unit.startsWith("d")) {
+      var d = new Date(base.getTime()); d.setDate(d.getDate() + count); return d;
+    } else if (unit.startsWith("w")) {
+      var d = new Date(base.getTime()); d.setDate(d.getDate() + count * 7); return d;
+    } else if (unit.startsWith("m")) {
+      return addMonthsSafe(base, count);
+    } else if (unit.startsWith("y")) {
+      return addYearsSafe(base, count);
     }
   }
 
-  var target = new Date(y, m, d, h, min, sec);
-  if (isNaN(target.getTime())) return null;
-  return target;
+  // Clean ordinal suffixes: 1st, 2nd, 3rd, 4th -> 1, 2, 3, 4
+  var cleanStr = s.replace(/(\d+)(st|nd|rd|th)/g, "$1").replace(/,/g, " ").replace(/\s+/g, " ").trim();
+
+  // 3. ISO format: YYYY-MM-DD, YYYY/MM/DD, YYYY.MM.DD
+  var isoMatch = cleanStr.match(/^(\d{4})[-\/\.](\d{1,2})[-\/\.](\d{1,2})$/);
+  if (isoMatch) {
+    var y = parseInt(isoMatch[1], 10);
+    var m = parseInt(isoMatch[2], 10) - 1;
+    var d = parseInt(isoMatch[3], 10);
+    return createValidDate(y, m, d);
+  }
+
+  // 4. Day-First format: DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY, DD/MM/YY
+  var dmyMatch = cleanStr.match(/^(\d{1,2})[-\/\.](\d{1,2})[-\/\.](\d{2,4})$/);
+  if (dmyMatch) {
+    var d = parseInt(dmyMatch[1], 10);
+    var m = parseInt(dmyMatch[2], 10) - 1;
+    var y = parseInt(dmyMatch[3], 10);
+    if (y < 100) y += (y < 50 ? 2000 : 1900);
+    return createValidDate(y, m, d);
+  }
+
+  // 5. Named Month: DD Month YYYY (e.g. "1 Aug 2027", "23 August 2027")
+  var dmyNamed = cleanStr.match(/^(\d{1,2})\s+([a-z]+)(?:\s+(\d{2,4}))?$/);
+  if (dmyNamed && MONTH_NAMES[dmyNamed[2]] !== undefined) {
+    var d = parseInt(dmyNamed[1], 10);
+    var m = MONTH_NAMES[dmyNamed[2]];
+    var y = dmyNamed[3] ? parseInt(dmyNamed[3], 10) : base.getFullYear();
+    if (y < 100) y += (y < 50 ? 2000 : 1900);
+    var res = createValidDate(y, m, d);
+    if (!dmyNamed[3] && res && res < base) {
+      res = createValidDate(y + 1, m, d);
+    }
+    return res;
+  }
+
+  // 6. Named Month: Month DD YYYY (e.g. "Aug 1 2027", "August 1 2027")
+  var mdyNamed = cleanStr.match(/^([a-z]+)\s+(\d{1,2})(?:\s+(\d{2,4}))?$/);
+  if (mdyNamed && MONTH_NAMES[mdyNamed[1]] !== undefined) {
+    var m = MONTH_NAMES[mdyNamed[1]];
+    var d = parseInt(mdyNamed[2], 10);
+    var y = mdyNamed[3] ? parseInt(mdyNamed[3], 10) : base.getFullYear();
+    if (y < 100) y += (y < 50 ? 2000 : 1900);
+    var res = createValidDate(y, m, d);
+    if (!mdyNamed[3] && res && res < base) {
+      res = createValidDate(y + 1, m, d);
+    }
+    return res;
+  }
+
+  // 7. Short numeric DD/MM or DD-MM
+  var dmShort = cleanStr.match(/^(\d{1,2})[-\/\.](\d{1,2})$/);
+  if (dmShort) {
+    var d = parseInt(dmShort[1], 10);
+    var m = parseInt(dmShort[2], 10) - 1;
+    var y = base.getFullYear();
+    var res = createValidDate(y, m, d);
+    if (res && res < base) res = createValidDate(y + 1, m, d);
+    return res;
+  }
+
+  return null;
+}
+
+/**
+ * Validates whether a date string is parseable.
+ */
+function isValidDate(dateStr) {
+  if (!dateStr || typeof dateStr !== "string" || dateStr.trim() === "") return false;
+  return parseTargetDate(dateStr) !== null;
+}
+
+/**
+ * Formats a Date object as DD/MM/YYYY.
+ */
+function formatDateDisplay(date) {
+  if (!(date instanceof Date) || isNaN(date.getTime())) return "";
+  var pad = function(n) { return n < 10 ? "0" + n : String(n); };
+  return pad(date.getDate()) + "/" + pad(date.getMonth() + 1) + "/" + date.getFullYear();
+}
+
+/**
+ * Formats a Date object as clean readable string (e.g. "1 Aug 2027").
+ */
+function formatDateNamed(date) {
+  if (!(date instanceof Date) || isNaN(date.getTime())) return "";
+  return date.getDate() + " " + SHORT_MONTH_NAMES[date.getMonth()] + " " + date.getFullYear();
+}
+
+/**
+ * Formats a Date object as ISO YYYY-MM-DD.
+ */
+function formatDateISO(date) {
+  if (!(date instanceof Date) || isNaN(date.getTime())) return "";
+  var pad = function(n) { return n < 10 ? "0" + n : String(n); };
+  return date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate());
+}
+
+/**
+ * Calculates preset target dates in clean DD/MM/YYYY format.
+ */
+function getPresetDate(type, now) {
+  var base = now instanceof Date ? new Date(now.getTime()) : new Date();
+  base.setHours(0, 0, 0, 0);
+
+  switch (type) {
+    case "+1d":
+      base.setDate(base.getDate() + 1);
+      return formatDateDisplay(base);
+
+    case "+1w":
+      base.setDate(base.getDate() + 7);
+      return formatDateDisplay(base);
+
+    case "+1m":
+      base = addMonthsSafe(base, 1);
+      return formatDateDisplay(base);
+
+    case "+1y":
+      base = addYearsSafe(base, 1);
+      return formatDateDisplay(base);
+
+    case "end_month":
+      var lastDay = new Date(base.getFullYear(), base.getMonth() + 1, 0, 0, 0, 0);
+      return formatDateDisplay(lastDay);
+
+    case "end_year":
+      var endYear = new Date(base.getFullYear(), 11, 31, 0, 0, 0);
+      return formatDateDisplay(endYear);
+
+    default:
+      return formatDateDisplay(base);
+  }
 }
 
 /**
  * Calendar-aware countdown calculation.
  * Accurately calculates standard breakdown and total accumulated units.
  */
-function calculateCountdown(targetDateStr, targetTimeStr, now, startDateStr) {
+function calculateCountdown(targetDateStr, now, startDateStr) {
   var current = now instanceof Date ? now : new Date();
-  var target = parseTargetDate(targetDateStr, targetTimeStr, current);
+  var target = parseTargetDate(targetDateStr, current);
 
   if (!target) return null;
 
@@ -223,7 +396,7 @@ function calculateCountdown(targetDateStr, targetTimeStr, now, startDateStr) {
 
   // Baseline start calculation for percentage progression
   var baselineDate = null;
-  if (startDateStr && startDateStr.trim() !== "") {
+  if (startDateStr && typeof startDateStr === "string" && startDateStr.trim() !== "") {
     var parsedStart = new Date(startDateStr);
     if (!isNaN(parsedStart.getTime()) && parsedStart < target) {
       baselineDate = parsedStart;
@@ -231,8 +404,7 @@ function calculateCountdown(targetDateStr, targetTimeStr, now, startDateStr) {
   }
 
   if (!baselineDate) {
-    // If not set, use target minus total duration (or current year start)
-    baselineDate = new Date(current.getFullYear(), 0, 1);
+    baselineDate = new Date(current.getFullYear(), 0, 1, 0, 0, 0);
     if (baselineDate >= target) {
       baselineDate = new Date(target.getTime() - Math.max(diffMs, 7 * 24 * 3600 * 1000));
     }
@@ -557,91 +729,6 @@ function isUrgent(stats, thresholdDays) {
 }
 
 /**
- * Validates a YYYY-MM-DD date string.
- */
-function isValidDate(dateStr) {
-  if (!dateStr || dateStr.trim() === "") return false;
-  var match = dateStr.trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (!match) return false;
-  var y = parseInt(match[1], 10);
-  var m = parseInt(match[2], 10);
-  var d = parseInt(match[3], 10);
-  if (m < 1 || m > 12) return false;
-  if (d < 1 || d > 31) return false;
-  var test = new Date(y, m - 1, d);
-  return test.getFullYear() === y && test.getMonth() === m - 1 && test.getDate() === d;
-}
-
-/**
- * Validates a HH:MM time string.
- */
-function isValidTime(timeStr) {
-  if (!timeStr || timeStr.trim() === "") return true;
-  var match = timeStr.trim().match(/^(\d{1,2}):(\d{2})$/);
-  if (!match) return false;
-  var h = parseInt(match[1], 10);
-  var m = parseInt(match[2], 10);
-  return h >= 0 && h <= 23 && m >= 0 && m <= 59;
-}
-
-/**
- * Formats a Date object as YYYY-MM-DD.
- */
-function formatDateISO(date) {
-  if (!(date instanceof Date) || isNaN(date.getTime())) return "";
-  var y = date.getFullYear();
-  var m = (date.getMonth() + 1);
-  var d = date.getDate();
-  return y + "-" + (m < 10 ? "0" + m : m) + "-" + (d < 10 ? "0" + d : d);
-}
-
-/**
- * Formats a Date object as HH:MM.
- */
-function formatTimeISO(date) {
-  if (!(date instanceof Date) || isNaN(date.getTime())) return "00:00";
-  var h = date.getHours();
-  var m = date.getMinutes();
-  return (h < 10 ? "0" + h : h) + ":" + (m < 10 ? "0" + m : m);
-}
-
-/**
- * Calculates preset target dates.
- */
-function getPresetDate(type, now) {
-  var base = now instanceof Date ? new Date(now.getTime()) : new Date();
-
-  switch (type) {
-    case "+1d":
-      base.setDate(base.getDate() + 1);
-      return formatDateISO(base);
-
-    case "+1w":
-      base.setDate(base.getDate() + 7);
-      return formatDateISO(base);
-
-    case "+1m":
-      base = addMonthsSafe(base, 1);
-      return formatDateISO(base);
-
-    case "+1y":
-      base = addYearsSafe(base, 1);
-      return formatDateISO(base);
-
-    case "end_month":
-      var lastDay = new Date(base.getFullYear(), base.getMonth() + 1, 0);
-      return formatDateISO(lastDay);
-
-    case "end_year":
-      var endYear = new Date(base.getFullYear(), 11, 31);
-      return formatDateISO(endYear);
-
-    default:
-      return formatDateISO(base);
-  }
-}
-
-/**
  * Cycles to the next available display format.
  */
 function nextFormat(current) {
@@ -670,5 +757,6 @@ function nextStyle(current) {
   if (idx === -1) return styles[0];
   return styles[(idx + 1) % styles.length];
 }
+
 
 

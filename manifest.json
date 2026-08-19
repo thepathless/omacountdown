@@ -23,8 +23,7 @@
         {
           "id": "evt_1",
           "title": "NEET PG",
-          "targetDate": "2027-08-01",
-          "targetTime": "00:00",
+          "targetDate": "01/08/2027",
           "startDate": "2026-08-19T06:08:29.630Z",
           "iconStyle": "medical",
           "customEmoji": "\uf0f1"
@@ -54,21 +53,14 @@
         "type": "string",
         "label": "Event Title",
         "defaultValue": "Event",
-        "description": "Title or label for the countdown event (e.g. 'NEET PG', 'Project Launch', 'Vacation')."
+        "description": "Title or label for the countdown event (e.g. 'NEET PG', 'Vacation')."
       },
       {
         "key": "targetDate",
         "type": "string",
-        "label": "Target Date (YYYY-MM-DD)",
+        "label": "Target Date",
         "defaultValue": "",
-        "description": "Target date in YYYY-MM-DD format. If left empty, defaults to 7 days ahead."
-      },
-      {
-        "key": "targetTime",
-        "type": "string",
-        "label": "Target Time (HH:MM)",
-        "defaultValue": "00:00",
-        "description": "Target time of day in 24-hour HH:MM format."
+        "description": "Target date in any format (e.g. DD/MM/YYYY, DD-MM-YYYY, 1 Aug 2027, +30d). If left empty, defaults to 7 days ahead."
       },
       {
         "key": "startDate",
