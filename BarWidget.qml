@@ -545,11 +545,13 @@ BarWidget {
             model: root.countdownList
             delegate: Button {
               property bool isSelected: index === root.activeEventIndex
+              readonly property var thisStats: Model.calculateCountdown(modelData.targetDate, clock.date, modelData.startDate, modelData.createdAt)
+              readonly property color thisColor: (root.currentGradientColor && thisStats) ? Model.getProgressColor(thisStats) : Color.foreground
               text: (modelData.iconStyle !== "none" ? (Model.getIcon(modelData.iconStyle, modelData.customEmoji) + " ") : "") + (modelData.title || ("Event " + (index + 1)))
               active: isSelected
               selected: isSelected
-              accent: root.dynamicColor
-              foreground: isSelected ? root.dynamicColor : Color.foreground
+              accent: thisColor
+              foreground: isSelected ? thisColor : Color.foreground
               onClicked: root.selectEvent(index)
             }
           }

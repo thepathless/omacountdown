@@ -676,7 +676,8 @@ function interpolateHex(hex1, hex2, factor) {
 }
 
 /**
- * Computes perceptually-balanced percentage-based timeline gradient color.
+ * Computes perceptually-balanced percentage-based and days-based timeline gradient color.
+ * Takes the highest alert level between Percentage Elapsed and Absolute Days Remaining.
  * Follows modern Linear/Tailwind 5-stop palette:
  * Emerald (#10b981) -> Lime (#84cc16) -> Amber (#f59e0b) -> Orange (#f97316) -> Rose (#f43f5e).
  */
@@ -685,39 +686,47 @@ function getProgressColor(stats) {
   if (stats.isPast) return "#888888"; // Muted for past/elapsed events
 
   var ratioElapsed = stats.ratioElapsed !== undefined ? stats.ratioElapsed : 0.0;
-  var daysRemaining = stats.totalDays !== undefined ? stats.totalDays : 0;
+  var days = stats.totalDays !== undefined ? stats.totalDays : 0;
 
-  // Absolute critical guard: <= 3 days left is always high-alert Rose (#f43f5e)
-  if (daysRemaining <= 3) {
-    return "#f43f5e";
+  // Calculate Percentage Urgency (0.0 to 1.0)
+  var uPercent = 0.0;
+  if (ratioElapsed > 0.93) {
+    uPercent = 0.85 + ((ratioElapsed - 0.93) / 0.07) * 0.15;
+  } else if (ratioElapsed > 0.85) {
+    uPercent = 0.65 + ((ratioElapsed - 0.85) / 0.08) * 0.20;
+  } else if (ratioElapsed > 0.70) {
+    uPercent = 0.40 + ((ratioElapsed - 0.70) / 0.15) * 0.25;
+  } else if (ratioElapsed > 0.50) {
+    uPercent = ((ratioElapsed - 0.50) / 0.20) * 0.40;
   }
 
-  // Stop 1: 0% - 50% elapsed (50%+ remaining) -> Solid Emerald (#10b981)
-  if (ratioElapsed <= 0.50) {
-    return "#10b981";
+  // Calculate Absolute Days Urgency (0.0 to 1.0)
+  var uDays = 0.0;
+  if (days <= 3) {
+    uDays = 1.0;
+  } else if (days <= 7) {
+    uDays = 0.85 + ((7 - days) / 4.0) * 0.15;
+  } else if (days <= 14) {
+    uDays = 0.65 + ((14 - days) / 7.0) * 0.20;
+  } else if (days <= 30) {
+    uDays = 0.40 + ((30 - days) / 16.0) * 0.25;
+  } else if (days <= 60) {
+    uDays = ((60 - days) / 30.0) * 0.40;
   }
 
-  // Stop 2: 50% - 70% elapsed (30% - 50% remaining) -> Emerald (#10b981) to Lime (#84cc16)
-  if (ratioElapsed <= 0.70) {
-    var f = (ratioElapsed - 0.50) / 0.20;
-    return interpolateHex("#10b981", "#84cc16", f);
-  }
+  var u = Math.max(uPercent, uDays);
 
-  // Stop 3: 70% - 85% elapsed (15% - 30% remaining) -> Lime (#84cc16) to Amber Gold (#f59e0b)
-  if (ratioElapsed <= 0.85) {
-    var f = (ratioElapsed - 0.70) / 0.15;
-    return interpolateHex("#84cc16", "#f59e0b", f);
+  if (u <= 0.0) {
+    return "#10b981"; // Emerald
+  } else if (u <= 0.40) {
+    return interpolateHex("#10b981", "#84cc16", u / 0.40);
+  } else if (u <= 0.65) {
+    return interpolateHex("#84cc16", "#f59e0b", (u - 0.40) / 0.25);
+  } else if (u <= 0.85) {
+    return interpolateHex("#f59e0b", "#f97316", (u - 0.65) / 0.20);
+  } else {
+    return interpolateHex("#f97316", "#f43f5e", (u - 0.85) / 0.15);
   }
-
-  // Stop 4: 85% - 93% elapsed (7% - 15% remaining) -> Amber Gold (#f59e0b) to Burnt Orange (#f97316)
-  if (ratioElapsed <= 0.93) {
-    var f = (ratioElapsed - 0.85) / 0.08;
-    return interpolateHex("#f59e0b", "#f97316", f);
-  }
-
-  // Stop 5: 93% - 100% elapsed (< 7% remaining / Critical) -> Burnt Orange (#f97316) to Electric Rose (#f43f5e)
-  var f = (ratioElapsed - 0.93) / 0.07;
-  return interpolateHex("#f97316", "#f43f5e", f);
 }
 
 /**
