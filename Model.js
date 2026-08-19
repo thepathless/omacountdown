@@ -589,12 +589,13 @@ function nextIconStyle(current) {
 }
 
 /**
- * Cycles to the next available badge style.
+ * Cycles to the next available visual presentation style.
  */
-function nextBadgeStyle(current) {
-  var styles = ["flat", "flat_progress", "pill", "progress"];
+function nextStyle(current) {
+  var styles = ["ghost", "accent_text", "progress_track", "dynamic_progress"];
   var idx = styles.indexOf(current);
   if (idx === -1) return styles[0];
   return styles[(idx + 1) % styles.length];
 }
+
 

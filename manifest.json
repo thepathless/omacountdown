@@ -31,7 +31,7 @@
       "showLabel": true,
       "iconStyle": "medical",
       "customEmoji": "\uf0f1",
-      "badgeStyle": "flat",
+      "style": "dynamic_progress",
       "gradientColor": true,
       "urgentThresholdDays": 7
     },
@@ -151,17 +151,17 @@
         "description": "Custom Nerd Font glyph or text when iconStyle is 'custom'."
       },
       {
-        "key": "badgeStyle",
+        "key": "style",
         "type": "enum",
-        "label": "Badge Style",
+        "label": "Presentation Style",
         "options": [
-          "flat",
-          "flat_progress",
-          "pill",
-          "progress"
+          "ghost",
+          "accent_text",
+          "progress_track",
+          "dynamic_progress"
         ],
-        "defaultValue": "flat",
-        "description": "'flat' minimal transparent, 'flat_progress' minimal flat with timeline progress fill, 'pill' capsule border, 'progress' pill with progress fill."
+        "defaultValue": "dynamic_progress",
+        "description": "Visual presentation: 'ghost' (plain text), 'accent_text' (gradient text), 'progress_track' (linear progress track with plain text), or 'dynamic_progress' (gradient text and linear progress track)."
       },
       {
         "key": "gradientColor",

@@ -15,7 +15,11 @@ Customizable countdown timer plugin for [Omarchy](https://omarchy.org/). Display
 - **Quick Presets**: 1-click date setters (`+1D`, `+1W`, `+1M`, `+1Y`, `End of Month`, `End of Year`).
 - **Live Preview Hero Card**: Real-time counting display, event title, target timestamp, and dynamic timeline progress bar.
 - **Omarchy Nerd Font Icons**: Stethoscope (`\uf0f1`), Clock, Hourglass, Calendar, Target, Graduation, Book, Star, Plane, Heart, Bolt, or custom glyph.
-- **Native Badge Styles**: Flat, Flat Bar (with dynamic timeline progress fill), Pill, or Pill Bar.
+- **Presentation Styles**:
+  - `Ghost` — Minimal plain text in standard theme foreground color.
+  - `Accent Text` — Text colored with the dynamic Green-to-Red timeline gradient.
+  - `Linear Progress` — Flat background progress track fill showing elapsed time, with standard foreground text.
+  - `Dynamic Progress` — Both text and background progress track dynamically colored with the timeline gradient.
 - **Urgent Alerts**: Highlights the widget in theme urgent color when the event is within N days.
 - **Bar Positioning**: Move between left, center, and right sections directly from the popup.
 
@@ -32,7 +36,7 @@ Customizable countdown timer plugin for [Omarchy](https://omarchy.org/). Display
 1. Click the widget on your bar.
 2. Edit **Event Title**, **Date** (`YYYY-MM-DD`), and **Time** (`HH:MM`), or click a preset button.
 3. Toggle which **Units** to show (Years, Months, Days, Hours, Minutes).
-4. Choose your preferred **Format**, **Icon**, and **Badge Style**.
+4. Choose your preferred **Format**, **Icon**, and **Presentation Style**.
 
 ## IPC Commands
 
@@ -40,13 +44,14 @@ Customizable countdown timer plugin for [Omarchy](https://omarchy.org/). Display
 # Toggle popup
 omarchy-shell omacountdown toggle
 
-# Cycle format / icon / badge
+# Cycle format / icon / presentation style
 omarchy-shell omacountdown cycleFormat
 omarchy-shell omacountdown cycleIcon
-omarchy-shell omacountdown cycleBadge
+omarchy-shell omacountdown cycleStyle
 
 # Move bar section
 omarchy-shell omacountdown moveSection center
 ```
+
 
 

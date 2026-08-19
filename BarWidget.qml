@@ -24,7 +24,7 @@ BarWidget {
   readonly property bool showLabel: setting("showLabel", true)
   readonly property string currentIconStyle: setting("iconStyle", "medical")
   readonly property string customEmoji: setting("customEmoji", "\uf0f1")
-  readonly property string currentBadgeStyle: setting("badgeStyle", "flat")
+  readonly property string currentStyle: setting("style", setting("badgeStyle", "dynamic_progress"))
   readonly property bool currentGradientColor: setting("gradientColor", true)
   readonly property int currentUrgentThresholdDays: setting("urgentThresholdDays", 7)
 
@@ -100,6 +100,7 @@ BarWidget {
   onShowHoursChanged: root.updateTime()
   onShowMinutesChanged: root.updateTime()
   onCurrentFormatChanged: root.updateTime()
+  onCurrentStyleChanged: root.updateTime()
   onCurrentGradientColorChanged: root.updateTime()
 
   function cycleFormat() {
@@ -112,9 +113,9 @@ BarWidget {
     updateSetting("iconStyle", next)
   }
 
-  function cycleBadgeStyle() {
-    var next = Model.nextBadgeStyle(currentBadgeStyle)
-    updateSetting("badgeStyle", next)
+  function cycleStyle() {
+    var next = Model.nextStyle(currentStyle)
+    updateSetting("style", next)
   }
 
   function handleWheel() {
@@ -216,7 +217,7 @@ BarWidget {
     function refresh(): void { root.broadcast("updateTime") }
     function cycleFormat(): void { root.cycleFormat() }
     function cycleIcon(): void { root.cycleIconStyle() }
-    function cycleBadge(): void { root.cycleBadgeStyle() }
+    function cycleStyle(): void { root.cycleStyle() }
     function moveSection(section: string): void { root.moveToSection(section) }
     function toggle(): void { root.toggleDashboard() }
     function open(): void { dashboardPopup.open = true }
@@ -225,7 +226,7 @@ BarWidget {
 
   implicitWidth: root.vertical
     ? barSize
-    : (buttonHorizontal.implicitWidth + (root.currentBadgeStyle !== "flat" ? 12 : 0))
+    : (buttonHorizontal.implicitWidth + ((root.currentStyle === "progress_track" || root.currentStyle === "dynamic_progress") ? 12 : 0))
   implicitHeight: root.vertical
     ? (verticalColumn.implicitHeight + 8)
     : barSize
@@ -243,43 +244,28 @@ BarWidget {
       visible: !root.vertical
       anchors.fill: parent
 
-      // Badge / Pill / Flat Progress Background
+      // Linear Progress Track Background & Dynamic Fill
       Rectangle {
         anchors.fill: parent
         anchors.margins: 2
-        visible: root.currentBadgeStyle === "pill" || root.currentBadgeStyle === "progress" || root.currentBadgeStyle === "flat_progress"
-        radius: (root.currentBadgeStyle === "pill" || root.currentBadgeStyle === "progress") ? height / 2 : Style.cornerRadius
-        color: {
-          if (root.currentBadgeStyle === "flat_progress") return "transparent"
-          if (root.isUrgentState) {
-            return root.bar ? Qt.rgba(root.bar.urgent.r, root.bar.urgent.g, root.bar.urgent.b, 0.20) : Qt.rgba(1, 0.35, 0.35, 0.20)
-          }
-          if (root.currentBadgeStyle === "progress") {
-            return root.bar ? Qt.rgba(root.bar.background.r, root.bar.background.g, root.bar.background.b, 0.35) : Qt.rgba(0, 0, 0, 0.25)
-          }
-          return root.bar ? Qt.rgba(root.bar.background.r, root.bar.background.g, root.bar.background.b, 0.25) : "transparent"
-        }
-        border.width: (root.currentBadgeStyle === "flat_progress") ? 0 : 1
-        border.color: {
-          if (root.currentBadgeStyle === "flat_progress") return "transparent"
-          if (root.currentGradientColor) {
-            return Qt.rgba(root.dynamicColor.r, root.dynamicColor.g, root.dynamicColor.b, 0.35)
-          }
-          if (root.isUrgentState) {
-            return root.bar ? root.bar.urgent : Color.urgent
-          }
-          return root.bar ? Qt.rgba(root.bar.barForeground.r, root.bar.barForeground.g, root.bar.barForeground.b, 0.15) : "transparent"
-        }
+        visible: (root.currentStyle === "progress_track" || root.currentStyle === "dynamic_progress") && root.countdownStats
+        radius: Style.cornerRadius
+        color: root.bar ? Qt.rgba(root.bar.background.r, root.bar.background.g, root.bar.background.b, 0.25) : Qt.rgba(0, 0, 0, 0.20)
+        border.width: 0
 
-        // Dynamic Progress Fill for 'progress' and 'flat_progress' badge styles
+        // Progress Bar Fill (visual representation of time elapsed)
         Rectangle {
-          visible: (root.currentBadgeStyle === "progress" || root.currentBadgeStyle === "flat_progress") && root.countdownStats
           anchors.left: parent.left
           anchors.top: parent.top
           anchors.bottom: parent.bottom
           width: Math.max(0, parent.width * (root.countdownStats ? root.countdownStats.ratioElapsed : 0))
           radius: parent.radius
-          color: Qt.rgba(root.dynamicColor.r, root.dynamicColor.g, root.dynamicColor.b, 0.22)
+          color: {
+            if (root.currentStyle === "dynamic_progress") {
+              return Qt.rgba(root.dynamicColor.r, root.dynamicColor.g, root.dynamicColor.b, 0.25)
+            }
+            return root.bar ? Qt.rgba(root.bar.barForeground.r, root.bar.barForeground.g, root.bar.barForeground.b, 0.18) : Qt.rgba(1, 1, 1, 0.18)
+          }
         }
       }
 
@@ -290,9 +276,17 @@ BarWidget {
         text: root.fullLabel
         active: root.isUrgentState
         activeColor: root.dynamicColor
-        useActiveColor: root.isUrgentState || root.currentGradientColor
-        foreground: root.dynamicColor
-        horizontalMargin: root.currentBadgeStyle !== "flat" ? 6 : 8
+        useActiveColor: root.isUrgentState || root.currentStyle === "accent_text" || root.currentStyle === "dynamic_progress"
+        foreground: {
+          if (root.isUrgentState) {
+            return root.bar ? root.bar.urgent : Color.urgent
+          }
+          if (root.currentStyle === "accent_text" || root.currentStyle === "dynamic_progress") {
+            return root.dynamicColor
+          }
+          return root.bar ? root.bar.barForeground : Color.foreground
+        }
+        horizontalMargin: (root.currentStyle === "progress_track" || root.currentStyle === "dynamic_progress") ? 6 : 8
         verticalPadding: 4
         fontSize: Style.font.body
         tooltipText: root.tooltipInfo
@@ -331,7 +325,7 @@ BarWidget {
           text: root.activeIcon
           fontFamily: Style.font.family
           fontSize: Style.font.caption
-          color: root.dynamicColor
+          color: (root.currentStyle === "accent_text" || root.currentStyle === "dynamic_progress" || root.isUrgentState) ? root.dynamicColor : (root.bar ? root.bar.barForeground : Color.foreground)
         }
 
         OpticalGlyph {
@@ -340,7 +334,7 @@ BarWidget {
           text: root.countdownStats ? (root.countdownStats.totalDays + "d") : "?"
           fontFamily: Style.font.family
           fontSize: Style.font.tiny || 9
-          color: root.dynamicColor
+          color: (root.currentStyle === "accent_text" || root.currentStyle === "dynamic_progress" || root.isUrgentState) ? root.dynamicColor : (root.bar ? root.bar.barForeground : Color.foreground)
         }
       }
 
@@ -796,7 +790,7 @@ BarWidget {
         }
 
         PanelSectionHeader {
-          text: "BADGE STYLE"
+          text: "PRESENTATION STYLE"
           foreground: Color.foreground
         }
 
@@ -804,13 +798,13 @@ BarWidget {
           width: parent.width
           spacing: Style.spacing.xs
           options: [
-            { value: "flat", label: "Flat", tooltip: "Transparent minimal background" },
-            { value: "flat_progress", label: "Flat Bar", tooltip: "Minimal flat with dynamic timeline progress fill" },
-            { value: "pill", label: "Pill", tooltip: "Subtle capsule border" },
-            { value: "progress", label: "Pill Bar", tooltip: "Capsule border with dynamic progress fill" }
+            { value: "ghost", label: "Ghost", tooltip: "Plain text with standard foreground color" },
+            { value: "accent_text", label: "Accent Text", tooltip: "Text colored with dynamic timeline gradient" },
+            { value: "progress_track", label: "Linear Progress", tooltip: "Progress track fill with standard foreground text" },
+            { value: "dynamic_progress", label: "Dynamic Progress", tooltip: "Both text and progress track in dynamic gradient color" }
           ]
-          value: root.currentBadgeStyle
-          onChanged: function(val) { root.updateSetting("badgeStyle", val) }
+          value: root.currentStyle
+          onChanged: function(val) { root.updateSetting("style", val) }
         }
 
         Toggle {
@@ -865,4 +859,5 @@ BarWidget {
     }
   }
 }
+
 
