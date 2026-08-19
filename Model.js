@@ -28,7 +28,8 @@ function ensureCountdowns(settings) {
       id: "evt_default",
       title: "Event",
       targetDate: "",
-      startDate: new Date().toISOString(),
+      startDate: "",
+      createdAt: new Date().toISOString(),
       iconStyle: "medical",
       customEmoji: "\uf0f1"
     }];
@@ -42,7 +43,8 @@ function ensureCountdowns(settings) {
     id: "evt_1",
     title: (settings && settings.targetLabel !== undefined) ? settings.targetLabel : "Event",
     targetDate: settings.targetDate || "",
-    startDate: settings.startDate || new Date().toISOString(),
+    startDate: settings.startDate || "",
+    createdAt: new Date().toISOString(),
     iconStyle: settings.iconStyle || "medical",
     customEmoji: settings.customEmoji || "\uf0f1"
   }];
@@ -81,7 +83,8 @@ function createNewEvent(title) {
     id: "evt_" + Date.now(),
     title: title || "New Event",
     targetDate: dateStr,
-    startDate: new Date().toISOString(),
+    startDate: "",
+    createdAt: new Date().toISOString(),
     iconStyle: "calendar",
     customEmoji: ""
   };
@@ -415,12 +418,16 @@ function calculateCountdown(targetDateStr, now, startDateStr) {
     }
   }
 
-  if (!baselineDate) {
-    // Natural calendar fallback: Jan 1 of current year or 30 days prior
-    baselineDate = new Date(current.getFullYear(), 0, 1, 0, 0, 0);
-    if (baselineDate >= target || baselineDate > current) {
-      baselineDate = new Date(target.getTime() - Math.max(Math.abs(diffMs), 30 * 24 * 3600 * 1000));
+  if (!baselineDate && createdAtStr && typeof createdAtStr === "string" && createdAtStr.trim() !== "") {
+    var parsedCreated = parseStartDate(createdAtStr, current);
+    if (parsedCreated && parsedCreated < target) {
+      baselineDate = parsedCreated;
     }
+  }
+
+  // If no explicit start or creation date, baseline is today (0% elapsed at creation)
+  if (!baselineDate) {
+    baselineDate = new Date(current.getTime());
   }
 
   var totalSpanMs = target.getTime() - baselineDate.getTime();
@@ -428,14 +435,15 @@ function calculateCountdown(targetDateStr, now, startDateStr) {
   var ratioElapsed = 0.0;
   var ratioRemaining = 1.0;
 
-  if (totalSpanMs > 0) {
-    if (isPast) {
-      ratioElapsed = 1.0;
-      ratioRemaining = 0.0;
-    } else {
-      ratioElapsed = Math.max(0.0, Math.min(1.0, elapsedMs / totalSpanMs));
-      ratioRemaining = 1.0 - ratioElapsed;
-    }
+  if (isPast) {
+    ratioElapsed = 1.0;
+    ratioRemaining = 0.0;
+  } else if (elapsedMs <= 0) {
+    ratioElapsed = 0.0;
+    ratioRemaining = 1.0;
+  } else if (totalSpanMs > 0) {
+    ratioElapsed = Math.max(0.0, Math.min(1.0, elapsedMs / totalSpanMs));
+    ratioRemaining = 1.0 - ratioElapsed;
   }
 
   var percentElapsed = ratioElapsed * 100.0;

@@ -21,6 +21,7 @@ BarWidget {
   readonly property string rawTargetDate: (activeEvent && activeEvent.targetDate !== undefined) ? activeEvent.targetDate : ""
   readonly property string rawStartDate: (activeEvent && activeEvent.startDate !== undefined) ? activeEvent.startDate : ""
   readonly property string startDate: rawStartDate
+  readonly property string rawCreatedAt: (activeEvent && activeEvent.createdAt !== undefined) ? activeEvent.createdAt : ""
   readonly property string currentIconStyle: (activeEvent && activeEvent.iconStyle) ? activeEvent.iconStyle : "medical"
   readonly property string customEmoji: (activeEvent && activeEvent.customEmoji) ? activeEvent.customEmoji : "\uf0f1"
 
@@ -55,7 +56,7 @@ BarWidget {
   }
 
   // Live countdown calculation (Pure declarative binding!)
-  readonly property var countdownStats: Model.calculateCountdown(rawTargetDate, clock.date, startDate)
+  readonly property var countdownStats: Model.calculateCountdown(rawTargetDate, clock.date, startDate, rawCreatedAt)
   property real lastWheelTime: 0
   property bool showSavedFeedback: false
 
