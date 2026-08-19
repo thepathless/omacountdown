@@ -654,66 +654,70 @@ function getIcon(iconStyle, customEmoji) {
 }
 
 /**
- * Computes calibrated dynamic timeline gradient color from Green -> Lime -> Yellow -> Orange -> Red.
- * Correctly accounts for long-range events (e.g. 6 months away is 100% Pure Green #50fa7b).
+ * Helper to linearly interpolate between two hex color codes.
+ */
+function interpolateHex(hex1, hex2, factor) {
+  var c1 = {
+    r: parseInt(hex1.slice(1, 3), 16),
+    g: parseInt(hex1.slice(3, 5), 16),
+    b: parseInt(hex1.slice(5, 7), 16)
+  };
+  var c2 = {
+    r: parseInt(hex2.slice(1, 3), 16),
+    g: parseInt(hex2.slice(3, 5), 16),
+    b: parseInt(hex2.slice(5, 7), 16)
+  };
+  var f = Math.max(0.0, Math.min(1.0, factor));
+  var r = Math.round(c1.r + (c2.r - c1.r) * f);
+  var g = Math.round(c1.g + (c2.g - c1.g) * f);
+  var b = Math.round(c1.b + (c2.b - c1.b) * f);
+  var pad = function(n) { return (n < 16 ? "0" : "") + n.toString(16); };
+  return "#" + pad(r) + pad(g) + pad(b);
+}
+
+/**
+ * Computes perceptually-balanced percentage-based timeline gradient color.
+ * Follows modern Linear/Tailwind 5-stop palette:
+ * Emerald (#10b981) -> Lime (#84cc16) -> Amber (#f59e0b) -> Orange (#f97316) -> Rose (#f43f5e).
  */
 function getProgressColor(stats) {
-  if (!stats) return "#50fa7b";
+  if (!stats) return "#10b981";
   if (stats.isPast) return "#888888"; // Muted for past/elapsed events
 
-  var days = stats.totalDays !== undefined ? stats.totalDays : 0;
+  var ratioElapsed = stats.ratioElapsed !== undefined ? stats.ratioElapsed : 0.0;
+  var daysRemaining = stats.totalDays !== undefined ? stats.totalDays : 0;
 
-  // Calibrated smooth color stops:
-  // >= 60 days (2+ months, e.g. 6 months): 100% Pure Crisp Green (#50fa7b)
-  if (days >= 60) {
-    return "#50fa7b";
+  // Absolute critical guard: <= 3 days left is always high-alert Rose (#f43f5e)
+  if (daysRemaining <= 3) {
+    return "#f43f5e";
   }
 
-  // 60d down to 30d (1-2 months): Pure Green (#50fa7b) down to Lime Green (#a3e635)
-  if (days >= 30) {
-    var t = (days - 30) / 30.0;
-    var red = Math.round(163 + (80 - 163) * t);
-    var green = Math.round(230 + (250 - 230) * t);
-    var blue = Math.round(53 + (123 - 53) * t);
-    var hexR = (red < 16 ? "0" : "") + red.toString(16);
-    var hexG = (green < 16 ? "0" : "") + green.toString(16);
-    var hexB = (blue < 16 ? "0" : "") + blue.toString(16);
-    return "#" + hexR + hexG + hexB;
+  // Stop 1: 0% - 50% elapsed (50%+ remaining) -> Solid Emerald (#10b981)
+  if (ratioElapsed <= 0.50) {
+    return "#10b981";
   }
 
-  // 30d down to 14d (2-4 weeks): Lime Green (#a3e635) down to Warm Amber Yellow (#f1fa8c)
-  if (days >= 14) {
-    var t = (days - 14) / 16.0;
-    var red = Math.round(241 + (163 - 241) * t);
-    var green = Math.round(250 + (230 - 250) * t);
-    var blue = Math.round(140 + (53 - 140) * t);
-    var hexR = (red < 16 ? "0" : "") + red.toString(16);
-    var hexG = (green < 16 ? "0" : "") + green.toString(16);
-    var hexB = (blue < 16 ? "0" : "") + blue.toString(16);
-    return "#" + hexR + hexG + hexB;
+  // Stop 2: 50% - 70% elapsed (30% - 50% remaining) -> Emerald (#10b981) to Lime (#84cc16)
+  if (ratioElapsed <= 0.70) {
+    var f = (ratioElapsed - 0.50) / 0.20;
+    return interpolateHex("#10b981", "#84cc16", f);
   }
 
-  // 14d down to 3d (3-14 days): Warm Yellow (#f1fa8c) down to Vivid Orange (#ffb86c)
-  if (days >= 3) {
-    var t = (days - 3) / 11.0;
-    var red = Math.round(255 + (241 - 255) * t);
-    var green = Math.round(184 + (250 - 184) * t);
-    var blue = Math.round(108 + (140 - 108) * t);
-    var hexR = (red < 16 ? "0" : "") + red.toString(16);
-    var hexG = (green < 16 ? "0" : "") + green.toString(16);
-    var hexB = (blue < 16 ? "0" : "") + blue.toString(16);
-    return "#" + hexR + hexG + hexB;
+  // Stop 3: 70% - 85% elapsed (15% - 30% remaining) -> Lime (#84cc16) to Amber Gold (#f59e0b)
+  if (ratioElapsed <= 0.85) {
+    var f = (ratioElapsed - 0.70) / 0.15;
+    return interpolateHex("#84cc16", "#f59e0b", f);
   }
 
-  // < 3 days (0-3 days): Vivid Orange (#ffb86c) down to Crimson Red (#ff5555)
-  var t = days / 3.0;
-  var red = Math.round(255 + (255 - 255) * t);
-  var green = Math.round(85 + (184 - 85) * t);
-  var blue = Math.round(85 + (108 - 85) * t);
-  var hexR = (red < 16 ? "0" : "") + red.toString(16);
-  var hexG = (green < 16 ? "0" : "") + green.toString(16);
-  var hexB = (blue < 16 ? "0" : "") + blue.toString(16);
-  return "#" + hexR + hexG + hexB;
+  // Stop 4: 85% - 93% elapsed (7% - 15% remaining) -> Amber Gold (#f59e0b) to Burnt Orange (#f97316)
+  if (ratioElapsed <= 0.93) {
+    var f = (ratioElapsed - 0.85) / 0.08;
+    return interpolateHex("#f59e0b", "#f97316", f);
+  }
+
+  // Stop 5: 93% - 100% elapsed (< 7% remaining / Critical) -> Burnt Orange (#f97316) to Electric Rose (#f43f5e)
+  var f = (ratioElapsed - 0.93) / 0.07;
+  return interpolateHex("#f97316", "#f43f5e", f);
 }
 
 /**
