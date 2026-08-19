@@ -2,6 +2,10 @@
 
 An elegant, highly customizable status bar countdown timer plugin for **[Omarchy](https://omarchy.org/)** (Arch Linux + Hyprland + Quickshell).
 
+<p align="center">
+  <img src="./assets/preview.png" alt="OmaCountdown Preview" width="480" />
+</p>
+
 Track your most important milestones, exams, vacations, and annual events with calendar-accurate precision, intelligent natural-language date parsing, customizable units (Years, Months, Weeks, Days), high-contrast visual progress tracks, and dynamic green-to-red timeline gradient colors.
 
 ---
