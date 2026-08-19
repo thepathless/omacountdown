@@ -1,56 +1,120 @@
 # OmaCountdown ⏳
 
-An elegant, highly customizable status bar countdown timer plugin for **[Omarchy](https://omarchy.org/)** (Arch Linux + Hyprland + Quickshell).
-
 <p align="center">
-  <img src="./assets/preview.png" alt="OmaCountdown Preview" width="480" />
+  <b>A sleek, calendar-accurate multi-target countdown timer plugin for the <a href="https://omarchy.org/">Omarchy Desktop Shell</a>.</b><br>
+  <i>Built natively for Arch Linux · Hyprland Wayland Compositor · Quickshell QML</i>
 </p>
 
-Track your most important milestones, exams, vacations, and annual events with calendar-accurate precision, intelligent natural-language date parsing, customizable units (Years, Months, Weeks, Days), high-contrast visual progress tracks, and dynamic green-to-red timeline gradient colors.
+<p align="center">
+  <img src="https://img.shields.io/badge/Omarchy-Shell%20Plugin-50fa7b?style=for-the-badge&logo=archlinux&logoColor=white" alt="Omarchy Plugin" />
+  <img src="https://img.shields.io/badge/Quickshell-QML-8be9fd?style=for-the-badge&logo=qt&logoColor=white" alt="Quickshell" />
+  <img src="https://img.shields.io/badge/License-MIT-f1fa8c?style=for-the-badge" alt="License" />
+</p>
 
 ---
 
-## ⚡ One-Command Installation
+<p align="center">
+  <img src="./assets/desktop_showcase.png" alt="OmaCountdown Full Desktop Showcase" width="100%" />
+</p>
 
-To install and immediately enable OmaCountdown on your Omarchy status bar, run:
+---
+
+## ⚡ 1-Command Quick Installation
+
+Install and immediately activate **OmaCountdown** on your Omarchy status bar with a single command:
 
 ```bash
 omarchy plugin add https://github.com/thepathless/omacountdown.git --enable
 ```
 
 > [!TIP]
-> You can also update the plugin at any time with:
+> **Updating:** You can pull the latest improvements at any time by running:
 > ```bash
 > omarchy plugin update omacountdown
 > ```
 
 ---
 
-## ✨ Features
+## 📸 Visual Tour & Key Features
 
-- **Multi-Countdown Event Manager**: Add, edit, delete, and switch between multiple saved events (e.g. *NEET PG*, *Vacation*, *Birthdays*, *Projects*) directly from the status bar.
-- **Natural Language & Multi-Format Date Parser**: Type dates naturally in any format:
-  - Relative keywords: `today`, `tomorrow`, `yesterday`, `next week`, `+30d`, `-1y`
-  - Day-First / Month-First: `27/01/2027`, `27 Jan 2027`, `1st of August 2027`, `29th november`, `Aug 21`
-  - Smart Year Auto-Inference: Typing `27 jan` automatically targets upcoming `2027` without manual year input.
-  - Auto-Formatting on Enter/Blur: Instantly normalizes phrases into standard `DD/MM/YYYY`.
-- **Approach A Deterministic Progress Calculation**:
-  - Optional **`Started:`** baseline field to measure exact preparation progress from when you began studying or working.
-  - Leaves starting line at **0%** on Day 1 for new countdowns and fills smoothly toward **100%**.
-  - Annual mode (`-1y` or previous year date) for birthdays & anniversaries.
-- **Granular Date Units (Single-Row Toggles)**:
-  - Toggle any combination of **`[✓ Years]` `[✓ Months]` `[✓ Weeks]` `[✓ Days]`** with smooth mathematical rollover.
-- **4 Standard Presentation Styles**:
-  - `Ghost` — Minimal monochrome text in standard theme color.
-  - `Accent Text` — Text colored with the dynamic Green-to-Red timeline gradient.
+### 1. Multi-Target Event Manager & Live Hero Card
+Track exams, milestone deadlines, birthdays, and anniversaries simultaneously. Switching active countdowns dynamically updates the status bar in real time.
+
+<p align="center">
+  <img src="./assets/event_details.png" alt="Event Details and Live Hero Card" width="480" />
+</p>
+
+- **Dual-Orientation Date Parser**: Supports natural phrases (`today`, `tomorrow`, `yesterday`, `21st of aug`, `29th november`, `+30d`, `-1y`).
+- **Auto-Formatting**: Typing relative terms automatically resolves and standardizes into `DD/MM/YYYY` upon pressing Enter or losing focus.
+- **Approach A Baseline**: Measure progress from your actual starting date with the optional `Started:` anchor.
+
+---
+
+### 2. Granular Unit Toggles & 5 Format Styles
+Customize unit granularity with single-click toggle chips.
+
+<p align="center">
+  <img src="./assets/units_formats.png" alt="Display Units and Format Styles" width="480" />
+</p>
+
+- **Display Units**: Select any combination of `[✓ Years] [✓ Months] [✓ Weeks] [✓ Days]`.
+- **5 Adaptive Formats**:
+  - `Auto` — Smart adaptive display of the most relevant remaining units.
+  - `Full` — Shows all enabled units (e.g. `1y 2mo 1w 4d`).
+  - `Compact` — Shows the top 2 units for minimal bar footprint (e.g. `1w 4d`).
+  - `Days Only` — Displays total accumulated days (e.g. `11d`).
+  - `Progress %` — Direct completion percentage towards your goal.
+
+---
+
+### 3. Nerd Font Typography & Custom Emoji
+Personalize your milestones with built-in monochrome Nerd Font glyphs or your own custom emoji.
+
+<p align="center">
+  <img src="./assets/icons_selection.png" alt="Icon Selection and Custom Glyphs" width="480" />
+</p>
+
+- **Built-in Glyphs**: Medical Stethoscope (`\uf0f1`), Calendar, Target, Graduation Cap, Book, Star, Flight, Heart, Bolt, Clock.
+- **Custom Glyph / Emoji**: Type any custom unicode emoji (e.g. 🎯, 🎂, 🚀, 💍) or Nerd Font glyph.
+
+---
+
+### 4. 4 Presentation Styles & Linear 5-Stop Gradient
+Choose how the widget renders on your status bar with four distinct visual aesthetics.
+
+<p align="center">
+  <img src="./assets/presentation_styles.png" alt="Presentation Styles" width="480" />
+</p>
+
+- **Styles**:
+  - `Ghost` — Minimal monochrome text in standard theme foreground color.
+  - `Accent Text` — Text colored with the dynamic urgency timeline gradient.
   - `Linear Progress` — High-contrast background progress fill with crisp foreground text.
-  - `Dynamic Progress` — Both text and background track dynamically colored with the timeline gradient.
-- **Calibrated Timeline Gradient**:
-  - Events > 60 days away render in **100% Crisp Green (`#50fa7b`)**, transitioning smoothly through Lime (`#a3e635`), Warm Amber (`#f1fa8c`), Vivid Orange (`#ffb86c`), down to Urgent Red (`#ff5555`) in the final 3 days.
-- **Native Wayland Keyboard Layer-Shell Focus**:
-  - Built with Omarchy's `KeyboardPanel` (`WlrLayershell.keyboardFocus`) for seamless typing, backspace, and cursor navigation on Hyprland.
-- **Pure Omarchy Theme Integration**:
-  - Uses authentic monochrome Nerd Font glyphs (`\uf0f1` Stethoscope, Calendar, Target, Graduation Cap, Book, Star, Plane, Heart, Bolt, Clock).
+  - `Dynamic Progress` — Both text and background track dynamically colored with the gradient.
+
+---
+
+## 🎨 Dual-Urgency Gradient Spectrum
+
+OmaCountdown calculates urgency using a **Dual-Urgency Engine** that takes the highest alert level between **Percentage of Time Elapsed** and **Days Remaining**:
+
+$$\text{Urgency} = \max(\text{Percentage Urgency},\ \text{Absolute Days Urgency})$$
+
+The gradient uses Linear/Tailwind's 5-stop perceptual palette with zero muddy midpoints:
+
+```
+[0% - 50% Elapsed]        [50% - 70%]          [70% - 85%]         [85% - 93%]         [93% - 100%]
+   #10b981      ──────►     #84cc16    ──────►   #f59e0b   ──────►   #f97316   ──────►    #f43f5e
+(Vibrant Emerald)         (Fresh Lime)        (Rich Amber)        (Burnt Orange)      (Electric Rose)
+```
+
+| Time / Progress Stage | Alert Level | Rendered Color | Exact Hex |
+| :--- | :--- | :--- | :--- |
+| **$> 60$ Days / $< 50\%$ Elapsed** | **Safe / Healthy** | **Vibrant Emerald** | `#10b981` |
+| **$30 - 60$ Days / $50\% - 70\%$** | **Steady Momentum** | **Fresh Lime** | `#84cc16` |
+| **$14 - 30$ Days / $70\% - 85\%$** | **Focus Zone** | **Rich Golden Amber** | `#f59e0b` |
+| **$7 - 14$ Days / $85\% - 93\%$** | **High Urgency** | **Vivid Burnt Orange** | `#f97316` |
+| **$\le 7$ Days / $> 93\%$ Elapsed** | **CRITICAL DEADLINE** | **Electric Crimson Rose** | `#f43f5e` |
 
 ---
 
@@ -68,25 +132,25 @@ omarchy plugin add https://github.com/thepathless/omacountdown.git --enable
 ## 🛠️ CLI & Management Commands
 
 ```bash
-# List installed plugins
+# List all installed Omarchy plugins
 omarchy plugin list
 
-# Validate plugin folder
+# Validate plugin integrity
 omarchy plugin validate ~/.config/omarchy/plugins/omacountdown
+
+# Move widget on bar (left, center, right)
+omarchy bar move omacountdown --section center
 
 # Enable or disable widget
 omarchy plugin enable omacountdown --section left
 omarchy plugin disable omacountdown
-
-# Move widget on bar
-omarchy bar move omacountdown --section center
 ```
 
 ---
 
 ## 📄 License
 
-MIT License. Designed with ❤️ for the Omarchy Linux desktop.
+MIT License. Designed with ❤️ for the [Omarchy](https://omarchy.org/) Linux desktop.
 
 
 
