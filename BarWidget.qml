@@ -23,7 +23,7 @@ BarWidget {
   readonly property string startDate: rawStartDate
   readonly property string rawCreatedAt: (activeEvent && activeEvent.createdAt !== undefined) ? activeEvent.createdAt : ""
   readonly property string currentIconStyle: (activeEvent && activeEvent.iconStyle) ? activeEvent.iconStyle : "medical"
-  readonly property string customEmoji: (activeEvent && activeEvent.customEmoji) ? activeEvent.customEmoji : "\uf0f1"
+  readonly property string customEmoji: (activeEvent && activeEvent.customEmoji !== undefined) ? activeEvent.customEmoji : ""
 
   // Global display preferences (Strictly Date-Only)
   readonly property string currentFormat: setting("format", "auto")
@@ -903,7 +903,7 @@ BarWidget {
             TextField {
               id: customIconInput
               width: parent.width - Style.space(55)
-              placeholderText: "Enter glyph (e.g. \\uf0f1 or text)"
+              placeholderText: "Type custom emoji or glyph (e.g. 🎯, 🎂, 🚀)"
               text: root.customEmoji
               onTextEdited: root.updateActiveEvent("customEmoji", text)
 

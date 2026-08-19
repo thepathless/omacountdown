@@ -31,7 +31,7 @@ function ensureCountdowns(settings) {
       startDate: "",
       createdAt: new Date().toISOString(),
       iconStyle: "medical",
-      customEmoji: "\uf0f1"
+      customEmoji: ""
     }];
   }
 
@@ -46,7 +46,7 @@ function ensureCountdowns(settings) {
     startDate: settings.startDate || "",
     createdAt: new Date().toISOString(),
     iconStyle: settings.iconStyle || "medical",
-    customEmoji: settings.customEmoji || "\uf0f1"
+    customEmoji: (settings && settings.customEmoji) ? settings.customEmoji : ""
   }];
 }
 
@@ -645,7 +645,7 @@ function getIcon(iconStyle, customEmoji) {
     case "bolt":
       return "\uf0e7"; // nf-fa-bolt
     case "custom":
-      return (customEmoji && customEmoji.trim() !== "") ? customEmoji.trim() : "\uf0f1";
+      return (customEmoji && typeof customEmoji === "string" && customEmoji.trim() !== "") ? customEmoji.trim() : "";
     case "none":
       return "";
     default:

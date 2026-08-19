@@ -26,7 +26,7 @@
           "targetDate": "01/08/2027",
           "startDate": "2026-08-19T06:08:29.630Z",
           "iconStyle": "medical",
-          "customEmoji": "\uf0f1"
+          "customEmoji": ""
         }
       ],
       "format": "auto",
@@ -143,7 +143,7 @@
         "key": "customEmoji",
         "type": "string",
         "label": "Custom Glyph / Text",
-        "defaultValue": "\uf0f1",
+        "defaultValue": "",
         "description": "Custom Nerd Font glyph or text when iconStyle is 'custom'."
       },
       {
