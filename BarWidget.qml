@@ -16,11 +16,11 @@ BarWidget {
   readonly property int activeEventIndex: Model.getActiveIndex(root.settings)
   readonly property var activeEvent: Model.getActiveEvent(root.settings)
 
-  // Active countdown parameters
   readonly property string rawEventTitle: (activeEvent && activeEvent.title !== undefined) ? activeEvent.title : ""
   readonly property string targetLabel: rawEventTitle.trim() !== "" ? rawEventTitle.trim() : "Event"
   readonly property string rawTargetDate: (activeEvent && activeEvent.targetDate !== undefined) ? activeEvent.targetDate : ""
-  readonly property string startDate: (activeEvent && activeEvent.startDate) ? activeEvent.startDate : ""
+  readonly property string rawStartDate: (activeEvent && activeEvent.startDate !== undefined) ? activeEvent.startDate : ""
+  readonly property string startDate: rawStartDate
   readonly property string currentIconStyle: (activeEvent && activeEvent.iconStyle) ? activeEvent.iconStyle : "medical"
   readonly property string customEmoji: (activeEvent && activeEvent.customEmoji) ? activeEvent.customEmoji : "\uf0f1"
 
@@ -160,6 +160,7 @@ BarWidget {
     entry["activeIndex"] = idx
     if (key === "title") entry["targetLabel"] = val
     if (key === "targetDate") entry["targetDate"] = val
+    if (key === "startDate") entry["startDate"] = val
     if (key === "iconStyle") entry["iconStyle"] = val
     if (key === "customEmoji") entry["customEmoji"] = val
     persistSettings(entry)
@@ -594,7 +595,7 @@ BarWidget {
             spacing: Style.spacing.sm
 
             Text {
-              text: "Date:"
+              text: "Target:"
               color: Color.foreground
               font.family: Style.font.family
               font.pixelSize: Style.font.caption
@@ -614,6 +615,35 @@ BarWidget {
                 property: "text"
                 value: root.rawTargetDate
                 when: !dateInput.activeFocus
+              }
+            }
+          }
+
+          Row {
+            width: parent.width
+            spacing: Style.spacing.sm
+
+            Text {
+              text: "Started:"
+              color: Color.foreground
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
+              width: Style.space(45)
+              anchors.verticalCenter: parent.verticalCenter
+            }
+
+            TextField {
+              id: startInput
+              width: parent.width - Style.space(55)
+              placeholderText: "Optional (e.g. 01/01/2026, 1 Jan)"
+              text: root.rawStartDate
+              onTextEdited: root.updateActiveEvent("startDate", text)
+
+              Binding {
+                target: startInput
+                property: "text"
+                value: root.rawStartDate
+                when: !startInput.activeFocus
               }
             }
           }

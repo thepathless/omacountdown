@@ -124,33 +124,48 @@ function createValidDate(y, m, d) {
 
 /**
  * Universal flexible date parser with intelligent year auto-inference.
- * Parses Day/Month/Year (DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY), ISO (YYYY-MM-DD),
- * Named Month strings ("1 Aug 2027", "27 Jan", "Aug 1 2027"), and relative keywords ("tomorrow", "+30d", "next week").
+ * Handles both Target Dates (future auto-advance) and Start Dates (past orientation).
  */
-function parseTargetDate(inputStr, now) {
+function parseFlexibleDate(inputStr, now, isStartDate) {
   var base = now instanceof Date ? new Date(now.getTime()) : new Date();
   base.setHours(0, 0, 0, 0);
 
   if (!inputStr || typeof inputStr !== "string" || inputStr.trim() === "") {
-    var def = new Date(base.getTime());
-    def.setDate(def.getDate() + 7);
-    return def;
+    return null;
   }
 
   var s = inputStr.trim().toLowerCase();
 
   // 1. Relative keyword shortcuts
+  if (s === "today" || s === "now") {
+    return new Date(base.getTime());
+  }
+  if (s === "yesterday" || s === "-1d") {
+    var d = new Date(base.getTime()); d.setDate(d.getDate() - 1); return d;
+  }
   if (s === "tomorrow" || s === "+1d") {
     var d = new Date(base.getTime()); d.setDate(d.getDate() + 1); return d;
+  }
+  if (s === "last week" || s === "-1w") {
+    var d = new Date(base.getTime()); d.setDate(d.getDate() - 7); return d;
   }
   if (s === "next week" || s === "+1w") {
     var d = new Date(base.getTime()); d.setDate(d.getDate() + 7); return d;
   }
+  if (s === "last month" || s === "-1m") {
+    return addMonthsSafe(base, -1);
+  }
   if (s === "next month" || s === "+1m") {
     return addMonthsSafe(base, 1);
   }
+  if (s === "last year" || s === "-1y") {
+    return addYearsSafe(base, -1);
+  }
   if (s === "next year" || s === "+1y") {
     return addYearsSafe(base, 1);
+  }
+  if (s === "start_year" || s === "start of year" || s === "start year") {
+    return new Date(base.getFullYear(), 0, 1, 0, 0, 0);
   }
   if (s === "end_month" || s === "end of month" || s === "end month") {
     return new Date(base.getFullYear(), base.getMonth() + 1, 0, 0, 0, 0);
@@ -159,11 +174,12 @@ function parseTargetDate(inputStr, now) {
     return new Date(base.getFullYear(), 11, 31, 0, 0, 0);
   }
 
-  // 2. Relative offsets: +10d, 10 days, in 30 days, +2w, +3m, +1y
-  var relMatch = s.match(/^(?:\+|\bin\s+)?(\d+)\s*(d|day|days|w|week|weeks|m|mo|month|months|y|yr|year|years)$/);
+  // 2. Relative offsets: +10d, -10d, 10 days, in 30 days
+  var relMatch = s.match(/^(?:(\+|\-|\bin\s+))?(\d+)\s*(d|day|days|w|week|weeks|m|mo|month|months|y|yr|year|years)$/);
   if (relMatch) {
-    var count = parseInt(relMatch[1], 10);
-    var unit = relMatch[2];
+    var sign = (relMatch[1] && relMatch[1].trim() === "-") ? -1 : 1;
+    var count = parseInt(relMatch[2], 10) * sign;
+    var unit = relMatch[3];
     if (unit.startsWith("d")) {
       var d = new Date(base.getTime()); d.setDate(d.getDate() + count); return d;
     } else if (unit.startsWith("w")) {
@@ -178,7 +194,7 @@ function parseTargetDate(inputStr, now) {
   // Clean ordinal suffixes: 1st, 2nd, 3rd, 4th -> 1, 2, 3, 4
   var cleanStr = s.replace(/(\d+)(st|nd|rd|th)/g, "$1").replace(/,/g, " ").replace(/\s+/g, " ").trim();
 
-  // 3. ISO format: YYYY-MM-DD, YYYY/MM/DD, YYYY.MM.DD
+  // 3. ISO format: YYYY-MM-DD
   var isoMatch = cleanStr.match(/^(\d{4})[-\/\.](\d{1,2})[-\/\.](\d{1,2})$/);
   if (isoMatch) {
     var y = parseInt(isoMatch[1], 10);
@@ -187,7 +203,7 @@ function parseTargetDate(inputStr, now) {
     return createValidDate(y, m, d);
   }
 
-  // 4. Day-First format: DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY, DD/MM/YY
+  // 4. Day-First format: DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
   var dmyMatch = cleanStr.match(/^(\d{1,2})[-\/\.](\d{1,2})[-\/\.](\d{2,4})$/);
   if (dmyMatch) {
     var d = parseInt(dmyMatch[1], 10);
@@ -197,7 +213,7 @@ function parseTargetDate(inputStr, now) {
     return createValidDate(y, m, d);
   }
 
-  // 5. Named Month: DD Month YYYY or DD Month (e.g. "27 Jan", "1 Aug 2027", "23 August 2027")
+  // 5. Named Month: DD Month YYYY or DD Month (e.g. "1 Jan", "27 Jan 2027")
   var dmyNamed = cleanStr.match(/^(\d{1,2})\s+([a-z]+)(?:\s+(\d{2,4}))?$/);
   if (dmyNamed && MONTH_NAMES[dmyNamed[2]] !== undefined) {
     var d = parseInt(dmyNamed[1], 10);
@@ -206,14 +222,14 @@ function parseTargetDate(inputStr, now) {
     var y = hasYear ? parseInt(dmyNamed[3], 10) : base.getFullYear();
     if (y < 100) y += (y < 50 ? 2000 : 1900);
     var res = createValidDate(y, m, d);
-    // Intelligent auto-advance: if year was omitted and date is past, target next year
-    if (!hasYear && res && res < base) {
-      res = createValidDate(y + 1, m, d);
+    if (!hasYear && res) {
+      if (!isStartDate && res < base) res = createValidDate(y + 1, m, d);
+      else if (isStartDate && res > base) res = createValidDate(y - 1, m, d);
     }
     return res;
   }
 
-  // 6. Named Month: Month DD YYYY or Month DD (e.g. "Jan 27", "Aug 1 2027", "August 1")
+  // 6. Named Month: Month DD YYYY or Month DD (e.g. "Jan 1", "Aug 1 2027")
   var mdyNamed = cleanStr.match(/^([a-z]+)\s+(\d{1,2})(?:\s+(\d{2,4}))?$/);
   if (mdyNamed && MONTH_NAMES[mdyNamed[1]] !== undefined) {
     var m = MONTH_NAMES[mdyNamed[1]];
@@ -222,24 +238,48 @@ function parseTargetDate(inputStr, now) {
     var y = hasYear ? parseInt(mdyNamed[3], 10) : base.getFullYear();
     if (y < 100) y += (y < 50 ? 2000 : 1900);
     var res = createValidDate(y, m, d);
-    if (!hasYear && res && res < base) {
-      res = createValidDate(y + 1, m, d);
+    if (!hasYear && res) {
+      if (!isStartDate && res < base) res = createValidDate(y + 1, m, d);
+      else if (isStartDate && res > base) res = createValidDate(y - 1, m, d);
     }
     return res;
   }
 
-  // 7. Short numeric DD/MM or DD-MM (e.g. 27/01) -> Auto-advances if past
+  // 7. Short numeric DD/MM
   var dmShort = cleanStr.match(/^(\d{1,2})[-\/\.](\d{1,2})$/);
   if (dmShort) {
     var d = parseInt(dmShort[1], 10);
     var m = parseInt(dmShort[2], 10) - 1;
     var y = base.getFullYear();
     var res = createValidDate(y, m, d);
-    if (res && res < base) res = createValidDate(y + 1, m, d);
+    if (res) {
+      if (!isStartDate && res < base) res = createValidDate(y + 1, m, d);
+      else if (isStartDate && res > base) res = createValidDate(y - 1, m, d);
+    }
     return res;
   }
 
   return null;
+}
+
+/**
+ * Parses target date string (defaults to 7 days ahead if empty).
+ */
+function parseTargetDate(inputStr, now) {
+  if (!inputStr || typeof inputStr !== "string" || inputStr.trim() === "") {
+    var base = now instanceof Date ? new Date(now.getTime()) : new Date();
+    base.setHours(0, 0, 0, 0);
+    base.setDate(base.getDate() + 7);
+    return base;
+  }
+  return parseFlexibleDate(inputStr, now, false);
+}
+
+/**
+ * Parses optional start date string.
+ */
+function parseStartDate(inputStr, now) {
+  return parseFlexibleDate(inputStr, now, true);
 }
 
 /**
@@ -314,7 +354,7 @@ function getPresetDate(type, now) {
 }
 
 /**
- * Calendar-aware DATE-ONLY countdown calculation (Strictly Years, Months, Days).
+ * Calendar-aware DATE-ONLY countdown calculation with Approach A Progress Math.
  */
 function calculateCountdown(targetDateStr, now, startDateStr) {
   var current = now instanceof Date ? new Date(now.getTime()) : new Date();
@@ -341,9 +381,7 @@ function calculateCountdown(targetDateStr, now, startDateStr) {
     if (nextY <= end) {
       years++;
       temp = nextY;
-    } else {
-      break;
-    }
+    } else break;
   }
 
   var baseAfterYears = new Date(temp.getTime());
@@ -353,56 +391,55 @@ function calculateCountdown(targetDateStr, now, startDateStr) {
     if (nextM <= end) {
       months++;
       temp = nextM;
-    } else {
-      break;
-    }
+    } else break;
   }
 
-  var days = 0;
+  var totalRemainingDays = 0;
   while (true) {
     var nextD = new Date(temp.getFullYear(), temp.getMonth(), temp.getDate() + 1, 0, 0, 0);
     if (nextD <= end) {
-      days++;
+      totalRemainingDays++;
       temp = nextD;
-    } else {
-      break;
-    }
+    } else break;
   }
 
-  // Baseline start calculation for percentage progression
+  var weeks = Math.floor(totalRemainingDays / 7);
+  var days = totalRemainingDays % 7;
+
+  // Approach A: Deterministic Start Date Horizon
   var baselineDate = null;
   if (startDateStr && typeof startDateStr === "string" && startDateStr.trim() !== "") {
-    var parsedStart = new Date(startDateStr);
-    parsedStart.setHours(0, 0, 0, 0);
-    if (!isNaN(parsedStart.getTime()) && parsedStart < target && parsedStart < current) {
+    var parsedStart = parseStartDate(startDateStr, current);
+    if (parsedStart && parsedStart < target) {
       baselineDate = parsedStart;
     }
   }
 
   if (!baselineDate) {
-    // Default baseline to beginning of current year (or 6 months before target)
+    // Natural calendar fallback: Jan 1 of current year or 30 days prior
     baselineDate = new Date(current.getFullYear(), 0, 1, 0, 0, 0);
-    if (baselineDate >= target || baselineDate >= current) {
+    if (baselineDate >= target || baselineDate > current) {
       baselineDate = new Date(target.getTime() - Math.max(Math.abs(diffMs), 30 * 24 * 3600 * 1000));
     }
   }
 
   var totalSpanMs = target.getTime() - baselineDate.getTime();
-  var ratioRemaining = 1.0;
+  var elapsedMs = current.getTime() - baselineDate.getTime();
   var ratioElapsed = 0.0;
+  var ratioRemaining = 1.0;
 
   if (totalSpanMs > 0) {
     if (isPast) {
-      ratioRemaining = 0.0;
       ratioElapsed = 1.0;
+      ratioRemaining = 0.0;
     } else {
-      ratioRemaining = Math.max(0.0, Math.min(1.0, diffMs / totalSpanMs));
-      ratioElapsed = 1.0 - ratioRemaining;
+      ratioElapsed = Math.max(0.0, Math.min(1.0, elapsedMs / totalSpanMs));
+      ratioRemaining = 1.0 - ratioElapsed;
     }
   }
 
-  var percentRemaining = ratioRemaining * 100.0;
   var percentElapsed = ratioElapsed * 100.0;
+  var percentRemaining = ratioRemaining * 100.0;
 
   return {
     target: target,
@@ -410,6 +447,7 @@ function calculateCountdown(targetDateStr, now, startDateStr) {
     baselineDate: baselineDate,
     years: years,
     months: months,
+    weeks: weeks,
     days: days,
     totalDays: totalDays,
     isPast: isPast,
