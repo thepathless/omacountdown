@@ -18,10 +18,18 @@
     "allowMultiple": false,
     "defaultSection": "right",
     "defaults": {
-      "targetLabel": "Event",
-      "targetDate": "",
-      "targetTime": "00:00",
-      "startDate": "",
+      "activeIndex": 0,
+      "countdowns": [
+        {
+          "id": "evt_1",
+          "title": "NEET PG",
+          "targetDate": "2027-08-01",
+          "targetTime": "00:00",
+          "startDate": "2026-08-19T06:08:29.630Z",
+          "iconStyle": "medical",
+          "customEmoji": "\uf0f1"
+        }
+      ],
       "format": "auto",
       "showYears": true,
       "showMonths": true,
@@ -29,13 +37,18 @@
       "showHours": true,
       "showMinutes": true,
       "showLabel": true,
-      "iconStyle": "medical",
-      "customEmoji": "\uf0f1",
       "style": "dynamic_progress",
       "gradientColor": true,
       "urgentThresholdDays": 7
     },
     "schema": [
+      {
+        "key": "activeIndex",
+        "type": "integer",
+        "label": "Active Countdown Index",
+        "defaultValue": 0,
+        "description": "Index of the active countdown shown on the status bar."
+      },
       {
         "key": "targetLabel",
         "type": "string",

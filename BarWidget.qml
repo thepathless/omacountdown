@@ -10,11 +10,20 @@ BarWidget {
   id: root
   moduleName: "omacountdown"
 
-  // Settings dynamically read from root.settings (persisted in shell.json)
-  readonly property string targetLabel: setting("targetLabel", "Event")
-  readonly property string targetDate: setting("targetDate", "")
-  readonly property string targetTime: setting("targetTime", "00:00")
-  readonly property string startDate: setting("startDate", "")
+  // Multi-event data model & active countdown resolution
+  readonly property var countdownList: Model.ensureCountdowns(root.settings)
+  readonly property int activeEventIndex: Model.getActiveIndex(root.settings)
+  readonly property var activeEvent: Model.getActiveEvent(root.settings)
+
+  // Active countdown parameters
+  readonly property string targetLabel: activeEvent.title || "Event"
+  readonly property string targetDate: activeEvent.targetDate || ""
+  readonly property string targetTime: activeEvent.targetTime || "00:00"
+  readonly property string startDate: activeEvent.startDate || ""
+  readonly property string currentIconStyle: activeEvent.iconStyle || "medical"
+  readonly property string customEmoji: activeEvent.customEmoji || "\uf0f1"
+
+  // Global display preferences
   readonly property string currentFormat: setting("format", "auto")
   readonly property bool showYears: setting("showYears", true)
   readonly property bool showMonths: setting("showMonths", true)
@@ -22,8 +31,6 @@ BarWidget {
   readonly property bool showHours: setting("showHours", true)
   readonly property bool showMinutes: setting("showMinutes", true)
   readonly property bool showLabel: setting("showLabel", true)
-  readonly property string currentIconStyle: setting("iconStyle", "medical")
-  readonly property string customEmoji: setting("customEmoji", "\uf0f1")
   readonly property string currentStyle: setting("style", setting("badgeStyle", "dynamic_progress"))
   readonly property bool currentGradientColor: setting("gradientColor", true)
   readonly property int currentUrgentThresholdDays: setting("urgentThresholdDays", 7)
@@ -47,7 +54,7 @@ BarWidget {
     return "right"
   }
 
-  // Live countdown stats calculation
+  // Live countdown calculation
   property var countdownStats: Model.calculateCountdown(targetDate, targetTime, clock.date, startDate)
   property real lastWheelTime: 0
 
@@ -77,15 +84,15 @@ BarWidget {
   })
   readonly property string fullLabel: (activeIcon !== "" ? (activeIcon + (activeText !== "" ? " " + activeText : "")) : activeText)
 
-  // Clean Omarchy Tooltip Info (monochrome typography, zero unicode emoji noise)
+  // Clean Omarchy Tooltip Info
   readonly property string tooltipInfo: (targetLabel || "Event") + "\n" +
     (countdownStats ? ("Remaining: " + Model.formatDetailed(countdownStats, { showYears: showYears, showMonths: showMonths, showDays: showDays, showHours: showHours, showMinutes: showMinutes }) + "\n" +
      "Target: " + Model.formatDateISO(countdownStats.target) + " " + Model.formatTimeISO(countdownStats.target) + "\n" +
      "Status: " + (countdownStats.isPast ? "Elapsed" : "In Progress") + "\n") : "No target date set\n") +
     "──────────────────────────\n" +
-    "• Left-click: Settings & Controls\n" +
-    "• Middle-click: Cycle Format (" + currentFormat + ")\n" +
-    "• Right-click: Settings & Controls"
+    "• Left-click: Settings & Events\n" +
+    "• Middle-click: Next Event / Format\n" +
+    "• Right-click: Settings & Events"
 
   function updateTime() {
     countdownStats = Model.calculateCountdown(targetDate, targetTime, clock.date, startDate)
@@ -102,15 +109,95 @@ BarWidget {
   onCurrentFormatChanged: root.updateTime()
   onCurrentStyleChanged: root.updateTime()
   onCurrentGradientColorChanged: root.updateTime()
+  onActiveEventIndexChanged: root.updateTime()
+
+  function persistSettings(entry) {
+    root.settings = entry
+    root.updateTime()
+    if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === "function") {
+      root.bar.shell.updateEntryInline(root.moduleName, entry)
+      if (root.moduleName !== "suva.mimo-countdown") {
+        root.bar.shell.updateEntryInline("suva.mimo-countdown", entry)
+      }
+    }
+  }
+
+  function selectEvent(idx) {
+    var list = Model.ensureCountdowns(root.settings)
+    if (idx < 0 || idx >= list.length) return
+    var entry = { id: root.moduleName }
+    for (var k in root.settings) if (k !== "id") entry[k] = root.settings[k]
+    entry["activeIndex"] = idx
+    entry["countdowns"] = list
+    persistSettings(entry)
+  }
+
+  function addNewEvent() {
+    var list = Model.ensureCountdowns(root.settings).slice()
+    var newEvt = Model.createNewEvent("Event " + (list.length + 1))
+    list.push(newEvt)
+    var entry = { id: root.moduleName }
+    for (var k in root.settings) if (k !== "id") entry[k] = root.settings[k]
+    entry["countdowns"] = list
+    entry["activeIndex"] = list.length - 1
+    persistSettings(entry)
+  }
+
+  function deleteActiveEvent() {
+    var list = Model.ensureCountdowns(root.settings).slice()
+    if (list.length <= 1) return
+    list.splice(root.activeEventIndex, 1)
+    var nextIdx = Math.min(root.activeEventIndex, list.length - 1)
+    var entry = { id: root.moduleName }
+    for (var k in root.settings) if (k !== "id") entry[k] = root.settings[k]
+    entry["countdowns"] = list
+    entry["activeIndex"] = nextIdx
+    persistSettings(entry)
+  }
+
+  function updateActiveEvent(key, val) {
+    var list = JSON.parse(JSON.stringify(Model.ensureCountdowns(root.settings)))
+    var idx = root.activeEventIndex
+    if (idx < 0 || idx >= list.length) idx = 0
+    list[idx][key] = val
+    if (key === "targetDate") {
+      list[idx]["startDate"] = new Date().toISOString()
+    }
+    var entry = { id: root.moduleName }
+    for (var k in root.settings) if (k !== "id") entry[k] = root.settings[k]
+    entry["countdowns"] = list
+    entry["activeIndex"] = idx
+    // Keep legacy root props synced for compatibility
+    if (key === "title") entry["targetLabel"] = val
+    if (key === "targetDate") entry["targetDate"] = val
+    if (key === "targetTime") entry["targetTime"] = val
+    if (key === "iconStyle") entry["iconStyle"] = val
+    if (key === "customEmoji") entry["customEmoji"] = val
+    persistSettings(entry)
+  }
+
+  function updateSetting(key, val) {
+    var entry = { id: root.moduleName }
+    for (var k in root.settings) if (k !== "id") entry[k] = root.settings[k]
+    entry[key] = val
+    persistSettings(entry)
+  }
+
+  function applyPreset(presetType) {
+    var pDate = Model.getPresetDate(presetType, clock.date)
+    updateActiveEvent("targetDate", pDate)
+  }
+
+  function cycleNextCountdown() {
+    var list = Model.ensureCountdowns(root.settings)
+    if (list.length <= 1) return
+    var next = (root.activeEventIndex + 1) % list.length
+    selectEvent(next)
+  }
 
   function cycleFormat() {
     var next = Model.nextFormat(currentFormat)
     updateSetting("format", next)
-  }
-
-  function cycleIconStyle() {
-    var next = Model.nextIconStyle(currentIconStyle)
-    updateSetting("iconStyle", next)
   }
 
   function cycleStyle() {
@@ -122,46 +209,15 @@ BarWidget {
     var now = Date.now()
     if (now - lastWheelTime < 250) return
     lastWheelTime = now
-    cycleFormat()
+    if (countdownList.length > 1) {
+      cycleNextCountdown()
+    } else {
+      cycleFormat()
+    }
   }
 
   function toggleDashboard() {
     dashboardPopup.open = !dashboardPopup.open
-  }
-
-  function updateSetting(key, val) {
-    var entry = { id: root.moduleName }
-    for (var k in root.settings) if (k !== "id") entry[k] = root.settings[k]
-    entry[key] = val
-
-    // Applied locally first so UI changes reactively on the click itself
-    root.settings = entry
-    root.updateTime()
-
-    // Persist cleanly via shell host
-    if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === "function") {
-      root.bar.shell.updateEntryInline(root.moduleName, entry)
-      if (root.moduleName !== "suva.mimo-countdown") {
-        root.bar.shell.updateEntryInline("suva.mimo-countdown", entry)
-      }
-    }
-  }
-
-  function setTargetDate(dateStr) {
-    var entry = { id: root.moduleName }
-    for (var k in root.settings) if (k !== "id") entry[k] = root.settings[k]
-    entry["targetDate"] = dateStr
-    entry["startDate"] = new Date().toISOString()
-    root.settings = entry
-    root.updateTime()
-    if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === "function") {
-      root.bar.shell.updateEntryInline(root.moduleName, entry)
-    }
-  }
-
-  function applyPreset(presetType) {
-    var pDate = Model.getPresetDate(presetType, clock.date)
-    setTargetDate(pDate)
   }
 
   function moveToSection(targetSection) {
@@ -215,8 +271,8 @@ BarWidget {
     target: "omacountdown"
 
     function refresh(): void { root.broadcast("updateTime") }
+    function nextEvent(): void { root.cycleNextCountdown() }
     function cycleFormat(): void { root.cycleFormat() }
-    function cycleIcon(): void { root.cycleIconStyle() }
     function cycleStyle(): void { root.cycleStyle() }
     function moveSection(section: string): void { root.moveToSection(section) }
     function toggle(): void { root.toggleDashboard() }
@@ -251,20 +307,23 @@ BarWidget {
         visible: (root.currentStyle === "progress_track" || root.currentStyle === "dynamic_progress") && root.countdownStats
         radius: Style.cornerRadius
         color: root.bar ? Qt.rgba(root.bar.background.r, root.bar.background.g, root.bar.background.b, 0.25) : Qt.rgba(0, 0, 0, 0.20)
-        border.width: 0
+        border.width: 1
+        border.color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.15)
 
         // Progress Bar Fill (visual representation of time elapsed)
         Rectangle {
           anchors.left: parent.left
           anchors.top: parent.top
           anchors.bottom: parent.bottom
-          width: Math.max(0, parent.width * (root.countdownStats ? root.countdownStats.ratioElapsed : 0))
+          width: (root.countdownStats && root.countdownStats.ratioElapsed > 0)
+            ? Math.max(4, parent.width * root.countdownStats.ratioElapsed)
+            : 0
           radius: parent.radius
           color: {
             if (root.currentStyle === "dynamic_progress") {
-              return Qt.rgba(root.dynamicColor.r, root.dynamicColor.g, root.dynamicColor.b, 0.25)
+              return Qt.rgba(root.dynamicColor.r, root.dynamicColor.g, root.dynamicColor.b, 0.35)
             }
-            return root.bar ? Qt.rgba(root.bar.barForeground.r, root.bar.barForeground.g, root.bar.barForeground.b, 0.18) : Qt.rgba(1, 1, 1, 0.18)
+            return root.bar ? Qt.rgba(root.bar.barForeground.r, root.bar.barForeground.g, root.bar.barForeground.b, 0.22) : Qt.rgba(1, 1, 1, 0.22)
           }
         }
       }
@@ -293,7 +352,8 @@ BarWidget {
 
         onPressed: function(btn) {
           if (btn === Qt.MiddleButton) {
-            root.cycleFormat()
+            if (root.countdownList.length > 1) root.cycleNextCountdown()
+            else root.cycleFormat()
           } else if (btn === Qt.RightButton) {
             root.toggleDashboard()
           } else {
@@ -344,8 +404,12 @@ BarWidget {
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
         onClicked: function(mouse) {
-          if (mouse.button === Qt.MiddleButton) root.cycleFormat()
-          else root.toggleDashboard()
+          if (mouse.button === Qt.MiddleButton) {
+            if (root.countdownList.length > 1) root.cycleNextCountdown()
+            else root.cycleFormat()
+          } else {
+            root.toggleDashboard()
+          }
         }
         onWheel: function(wheel) {
           root.handleWheel()
@@ -379,7 +443,8 @@ BarWidget {
         spacing: Style.spacing.sm
 
         Text {
-          text: root.activeIcon !== "" ? root.activeIcon : "\uf0f1"
+          visible: root.activeIcon !== ""
+          text: root.activeIcon
           color: root.dynamicColor
           font.family: Style.font.family
           font.pixelSize: Style.font.title
@@ -387,7 +452,7 @@ BarWidget {
         }
 
         Column {
-          width: parent.width - Style.space(70)
+          width: parent.width - (root.activeIcon !== "" ? Style.space(70) : Style.space(45))
           spacing: 1
           anchors.verticalCenter: parent.verticalCenter
 
@@ -400,7 +465,7 @@ BarWidget {
           }
 
           Text {
-            text: "Event Countdown & Bar Configuration"
+            text: "Event Countdown & Multi-Target Manager"
             color: Color.muted
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
@@ -438,7 +503,7 @@ BarWidget {
             spacing: Style.spacing.xs
 
             Text {
-              text: root.targetLabel || "Event"
+              text: (root.activeIcon !== "" ? (root.activeIcon + " ") : "") + (root.targetLabel || "Event")
               color: Color.foreground
               font.family: Style.font.family
               font.pixelSize: Style.font.body
@@ -492,10 +557,49 @@ BarWidget {
       }
 
       // -----------------------------------------------------------
+      // Multi-Countdown Events Selector
+      // -----------------------------------------------------------
+      PanelSectionHeader {
+        text: "COUNTDOWN EVENTS"
+        foreground: Color.foreground
+      }
+
+      Flow {
+        width: parent.width
+        spacing: Style.spacing.xs
+
+        Repeater {
+          model: root.countdownList
+          delegate: Button {
+            property bool isSelected: index === root.activeEventIndex
+            text: (modelData.iconStyle !== "none" ? (Model.getIcon(modelData.iconStyle, modelData.customEmoji) + " ") : "") + (modelData.title || ("Event " + (index + 1)))
+            active: isSelected
+            selected: isSelected
+            accent: root.dynamicColor
+            foreground: isSelected ? root.dynamicColor : Color.foreground
+            onClicked: root.selectEvent(index)
+          }
+        }
+
+        Button {
+          text: "+ Add"
+          tooltipText: "Create a new countdown target"
+          onClicked: root.addNewEvent()
+        }
+
+        Button {
+          visible: root.countdownList.length > 1
+          iconText: "\uf014"
+          tooltipText: "Delete selected countdown"
+          onClicked: root.deleteActiveEvent()
+        }
+      }
+
+      // -----------------------------------------------------------
       // Target Event Configuration
       // -----------------------------------------------------------
       PanelSectionHeader {
-        text: "TARGET EVENT"
+        text: "EVENT DETAILS"
         foreground: Color.foreground
       }
 
@@ -520,7 +624,7 @@ BarWidget {
             width: parent.width - Style.space(55)
             placeholderText: "e.g. NEET PG, Project Launch"
             text: root.targetLabel
-            onTextChanged: root.updateSetting("targetLabel", text)
+            onTextChanged: root.updateActiveEvent("title", text)
           }
         }
 
@@ -544,7 +648,7 @@ BarWidget {
             text: root.targetDate
             onTextChanged: {
               if (Model.isValidDate(text) || text === "") {
-                root.setTargetDate(text)
+                root.updateActiveEvent("targetDate", text)
               }
             }
           }
@@ -564,7 +668,7 @@ BarWidget {
             text: root.targetTime
             onTextChanged: {
               if (Model.isValidTime(text)) {
-                root.updateSetting("targetTime", text)
+                root.updateActiveEvent("targetTime", text)
               }
             }
           }
@@ -615,57 +719,46 @@ BarWidget {
       }
 
       // -----------------------------------------------------------
-      // Display Units Configuration
+      // Compact Display Units Configuration (Single Sleek Row)
       // -----------------------------------------------------------
       PanelSectionHeader {
-        text: "DISPLAY UNITS (YEAR, MONTH, DAY, HRS, MINS)"
+        text: "DISPLAY UNITS"
         foreground: Color.foreground
       }
 
-      Column {
+      Row {
         width: parent.width
         spacing: Style.spacing.xs
 
-        Row {
-          width: parent.width
-          spacing: Style.spacing.xs
-
-          Button {
-            text: root.showYears ? "\uf00c Years" : "Years"
-            tooltipText: "Toggle years in countdown"
-            width: (parent.width - Style.spacing.xs * 2) / 3
-            onClicked: root.updateSetting("showYears", !root.showYears)
-          }
-          Button {
-            text: root.showMonths ? "\uf00c Months" : "Months"
-            tooltipText: "Toggle months in countdown"
-            width: (parent.width - Style.spacing.xs * 2) / 3
-            onClicked: root.updateSetting("showMonths", !root.showMonths)
-          }
-          Button {
-            text: root.showDays ? "\uf00c Days" : "Days"
-            tooltipText: "Toggle days in countdown"
-            width: (parent.width - Style.spacing.xs * 2) / 3
-            onClicked: root.updateSetting("showDays", !root.showDays)
-          }
+        Button {
+          text: root.showYears ? "\uf00c Years" : "Years"
+          tooltipText: "Toggle years in countdown"
+          width: (parent.width - Style.spacing.xs * 4) / 5
+          onClicked: root.updateSetting("showYears", !root.showYears)
         }
-
-        Row {
-          width: parent.width
-          spacing: Style.spacing.xs
-
-          Button {
-            text: root.showHours ? "\uf00c Hours" : "Hours"
-            tooltipText: "Toggle hours in countdown"
-            width: (parent.width - Style.spacing.xs) / 2
-            onClicked: root.updateSetting("showHours", !root.showHours)
-          }
-          Button {
-            text: root.showMinutes ? "\uf00c Minutes" : "Minutes"
-            tooltipText: "Toggle minutes in countdown"
-            width: (parent.width - Style.spacing.xs) / 2
-            onClicked: root.updateSetting("showMinutes", !root.showMinutes)
-          }
+        Button {
+          text: root.showMonths ? "\uf00c Months" : "Months"
+          tooltipText: "Toggle months in countdown"
+          width: (parent.width - Style.spacing.xs * 4) / 5
+          onClicked: root.updateSetting("showMonths", !root.showMonths)
+        }
+        Button {
+          text: root.showDays ? "\uf00c Days" : "Days"
+          tooltipText: "Toggle days in countdown"
+          width: (parent.width - Style.spacing.xs * 4) / 5
+          onClicked: root.updateSetting("showDays", !root.showDays)
+        }
+        Button {
+          text: root.showHours ? "\uf00c Hours" : "Hours"
+          tooltipText: "Toggle hours in countdown"
+          width: (parent.width - Style.spacing.xs * 4) / 5
+          onClicked: root.updateSetting("showHours", !root.showHours)
+        }
+        Button {
+          text: root.showMinutes ? "\uf00c Mins" : "Mins"
+          tooltipText: "Toggle minutes in countdown"
+          width: (parent.width - Style.spacing.xs * 4) / 5
+          onClicked: root.updateSetting("showMinutes", !root.showMinutes)
         }
       }
 
@@ -692,10 +785,10 @@ BarWidget {
       }
 
       // -----------------------------------------------------------
-      // Appearance & Icons (Omarchy Nerd Font Glyphs)
+      // Icons Section (Clean, Consistent, No Redundant Buttons)
       // -----------------------------------------------------------
       PanelSectionHeader {
-        text: "ICONS & GLYPHS (OMARCHY NERD FONTS)"
+        text: "ICONS"
         foreground: Color.foreground
       }
 
@@ -714,7 +807,7 @@ BarWidget {
             { value: "calendar", label: "\uf073 Cal", tooltip: "Calendar event" }
           ]
           value: (root.currentIconStyle === "medical" || root.currentIconStyle === "clock" || root.currentIconStyle === "hourglass" || root.currentIconStyle === "calendar") ? root.currentIconStyle : ""
-          onChanged: function(val) { root.updateSetting("iconStyle", val) }
+          onChanged: function(val) { root.updateActiveEvent("iconStyle", val) }
         }
 
         // Icon Row 2
@@ -728,7 +821,7 @@ BarWidget {
             { value: "star", label: "\uf005 Star", tooltip: "Milestone star" }
           ]
           value: (root.currentIconStyle === "target" || root.currentIconStyle === "grad" || root.currentIconStyle === "book" || root.currentIconStyle === "star") ? root.currentIconStyle : ""
-          onChanged: function(val) { root.updateSetting("iconStyle", val) }
+          onChanged: function(val) { root.updateActiveEvent("iconStyle", val) }
         }
 
         // Icon Row 3
@@ -742,38 +835,30 @@ BarWidget {
             { value: "none", label: "Off", tooltip: "No icon" }
           ]
           value: (root.currentIconStyle === "plane" || root.currentIconStyle === "heart" || root.currentIconStyle === "bolt" || root.currentIconStyle === "none") ? root.currentIconStyle : ""
-          onChanged: function(val) { root.updateSetting("iconStyle", val) }
+          onChanged: function(val) { root.updateActiveEvent("iconStyle", val) }
         }
 
-        // Row 4: Custom Glyph & Badge
+        // Row 4: Custom Icon Option
         Row {
           width: parent.width
           spacing: Style.spacing.xs
 
           Button {
-            text: root.currentIconStyle === "custom" ? "\uf00c Custom Glyph" : "Custom Glyph"
+            text: root.currentIconStyle === "custom" ? "\uf00c Custom Icon" : "Custom Icon"
             tooltipText: "Enter custom Nerd Font glyph or text"
-            width: (parent.width - Style.spacing.xs) / 2
-            onClicked: root.updateSetting("iconStyle", "custom")
-          }
-
-          Button {
-            text: "Cycle Icon"
-            iconText: "\udb80\udce4"
-            tooltipText: "Cycle through all icons"
-            width: (parent.width - Style.spacing.xs) / 2
-            onClicked: root.cycleIconStyle()
+            width: parent.width
+            onClicked: root.updateActiveEvent("iconStyle", "custom")
           }
         }
 
-        // Custom Emoji/Glyph Input
+        // Custom Icon Input
         Row {
           width: parent.width
           spacing: Style.spacing.sm
           visible: root.currentIconStyle === "custom"
 
           Text {
-            text: "Glyph:"
+            text: "Icon:"
             color: Color.foreground
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
@@ -785,26 +870,71 @@ BarWidget {
             width: parent.width - Style.space(55)
             placeholderText: "Enter glyph (e.g. \\uf0f1 or text)"
             text: root.customEmoji
-            onTextChanged: root.updateSetting("customEmoji", text)
+            onTextChanged: root.updateActiveEvent("customEmoji", text)
+          }
+        }
+      }
+
+      // -----------------------------------------------------------
+      // Presentation Styles (2x2 Grid - Zero Truncation)
+      // -----------------------------------------------------------
+      PanelSectionHeader {
+        text: "PRESENTATION STYLE"
+        foreground: Color.foreground
+      }
+
+      Column {
+        width: parent.width
+        spacing: Style.spacing.xs
+
+        Row {
+          width: parent.width
+          spacing: Style.spacing.xs
+
+          Button {
+            text: "Ghost"
+            tooltipText: "Plain text with standard foreground color"
+            width: (parent.width - Style.spacing.xs) / 2
+            active: root.currentStyle === "ghost"
+            selected: root.currentStyle === "ghost"
+            accent: root.dynamicColor
+            onClicked: root.updateSetting("style", "ghost")
+          }
+
+          Button {
+            text: "Accent Text"
+            tooltipText: "Text colored with dynamic timeline gradient"
+            width: (parent.width - Style.spacing.xs) / 2
+            active: root.currentStyle === "accent_text"
+            selected: root.currentStyle === "accent_text"
+            accent: root.dynamicColor
+            onClicked: root.updateSetting("style", "accent_text")
           }
         }
 
-        PanelSectionHeader {
-          text: "PRESENTATION STYLE"
-          foreground: Color.foreground
-        }
-
-        ButtonGroup {
+        Row {
           width: parent.width
           spacing: Style.spacing.xs
-          options: [
-            { value: "ghost", label: "Ghost", tooltip: "Plain text with standard foreground color" },
-            { value: "accent_text", label: "Accent Text", tooltip: "Text colored with dynamic timeline gradient" },
-            { value: "progress_track", label: "Linear Progress", tooltip: "Progress track fill with standard foreground text" },
-            { value: "dynamic_progress", label: "Dynamic Progress", tooltip: "Both text and progress track in dynamic gradient color" }
-          ]
-          value: root.currentStyle
-          onChanged: function(val) { root.updateSetting("style", val) }
+
+          Button {
+            text: "Linear Progress"
+            tooltipText: "Progress track fill with standard foreground text"
+            width: (parent.width - Style.spacing.xs) / 2
+            active: root.currentStyle === "progress_track"
+            selected: root.currentStyle === "progress_track"
+            accent: root.dynamicColor
+            onClicked: root.updateSetting("style", "progress_track")
+          }
+
+          Button {
+            text: "Dynamic Progress"
+            tooltipText: "Both text and progress track in dynamic gradient color"
+            width: (parent.width - Style.spacing.xs) / 2
+            active: root.currentStyle === "dynamic_progress"
+            selected: root.currentStyle === "dynamic_progress"
+            accent: root.dynamicColor
+            onClicked: root.updateSetting("style", "dynamic_progress")
+          }
         }
 
         Toggle {

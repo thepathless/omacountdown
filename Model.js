@@ -2,9 +2,82 @@
 .pragma library
 
 /**
+ * Ensures countdowns array exists in settings with valid schema.
+ * Migrates legacy single-event properties if countdowns array is empty.
+ */
+function ensureCountdowns(settings) {
+  if (!settings) {
+    return [{
+      id: "evt_default",
+      title: "Event",
+      targetDate: "",
+      targetTime: "00:00",
+      startDate: new Date().toISOString(),
+      iconStyle: "medical",
+      customEmoji: "\uf0f1"
+    }];
+  }
+
+  if (Array.isArray(settings.countdowns) && settings.countdowns.length > 0) {
+    return settings.countdowns;
+  }
+
+  return [{
+    id: "evt_1",
+    title: settings.targetLabel || "Event",
+    targetDate: settings.targetDate || "",
+    targetTime: settings.targetTime || "00:00",
+    startDate: settings.startDate || new Date().toISOString(),
+    iconStyle: settings.iconStyle || "medical",
+    customEmoji: settings.customEmoji || "\uf0f1"
+  }];
+}
+
+/**
+ * Returns the currently active event object from settings.
+ */
+function getActiveEvent(settings) {
+  var list = ensureCountdowns(settings);
+  var idx = (settings && typeof settings.activeIndex === "number") ? settings.activeIndex : 0;
+  if (idx < 0 || idx >= list.length) idx = 0;
+  return list[idx] || list[0];
+}
+
+/**
+ * Returns the safe active index from settings.
+ */
+function getActiveIndex(settings) {
+  var list = ensureCountdowns(settings);
+  var idx = (settings && typeof settings.activeIndex === "number") ? settings.activeIndex : 0;
+  if (idx < 0 || idx >= list.length) idx = 0;
+  return idx;
+}
+
+/**
+ * Creates a new blank countdown event with a 7-day default target.
+ */
+function createNewEvent(title) {
+  var d = new Date();
+  d.setDate(d.getDate() + 7);
+  var pad = function(n) { return n < 10 ? "0" + n : String(n); };
+  var dateStr = d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+
+  return {
+    id: "evt_" + Date.now(),
+    title: title || "New Event",
+    targetDate: dateStr,
+    targetTime: "00:00",
+    startDate: new Date().toISOString(),
+    iconStyle: "calendar",
+    customEmoji: ""
+  };
+}
+
+/**
  * Safely adds N months to a date without overflowing past month boundaries (e.g. Jan 31 -> Feb 28).
  */
 function addMonthsSafe(date, n) {
+
   var d = date.getDate();
   var y = date.getFullYear();
   var m = date.getMonth() + n;
