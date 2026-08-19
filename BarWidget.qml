@@ -24,13 +24,11 @@ BarWidget {
   readonly property string currentIconStyle: (activeEvent && activeEvent.iconStyle) ? activeEvent.iconStyle : "medical"
   readonly property string customEmoji: (activeEvent && activeEvent.customEmoji) ? activeEvent.customEmoji : "\uf0f1"
 
-  // Global display preferences
+  // Global display preferences (Strictly Date-Only)
   readonly property string currentFormat: setting("format", "auto")
   readonly property bool showYears: setting("showYears", true)
   readonly property bool showMonths: setting("showMonths", true)
   readonly property bool showDays: setting("showDays", true)
-  readonly property bool showHours: setting("showHours", true)
-  readonly property bool showMinutes: setting("showMinutes", true)
   readonly property bool showLabel: setting("showLabel", true)
   readonly property string currentStyle: setting("style", setting("badgeStyle", "dynamic_progress"))
   readonly property bool currentGradientColor: setting("gradientColor", true)
@@ -58,11 +56,23 @@ BarWidget {
   // Live countdown calculation (Pure declarative binding!)
   readonly property var countdownStats: Model.calculateCountdown(rawTargetDate, clock.date, startDate)
   property real lastWheelTime: 0
+  property bool showSavedFeedback: false
+
+  Timer {
+    id: feedbackTimer
+    interval: 1800
+    onTriggered: root.showSavedFeedback = false
+  }
+
+  function triggerSaveFeedback() {
+    root.showSavedFeedback = true
+    feedbackTimer.restart()
+  }
 
   readonly property bool isUrgentState: Model.isUrgent(countdownStats, currentUrgentThresholdDays)
   readonly property string activeIcon: Model.getIcon(currentIconStyle, customEmoji)
 
-  // Dynamic Timeline Gradient Color (Green -> Yellow -> Orange -> Red)
+  // Dynamic Timeline Gradient Color (Green -> Lime -> Yellow -> Orange -> Red)
   readonly property color dynamicColor: {
     if (isUrgentState) {
       return root.bar ? root.bar.urgent : Color.urgent
@@ -78,8 +88,6 @@ BarWidget {
     showYears: showYears,
     showMonths: showMonths,
     showDays: showDays,
-    showHours: showHours,
-    showMinutes: showMinutes,
     showLabel: showLabel,
     targetLabel: targetLabel
   })
@@ -87,7 +95,7 @@ BarWidget {
 
   // Clean Omarchy Tooltip Info
   readonly property string tooltipInfo: (targetLabel || "Event") + "\n" +
-    (countdownStats ? ("Remaining: " + Model.formatDetailed(countdownStats, { showYears: showYears, showMonths: showMonths, showDays: showDays, showHours: showHours, showMinutes: showMinutes }) + "\n" +
+    (countdownStats ? ("Remaining: " + Model.formatDetailed(countdownStats, { showYears: showYears, showMonths: showMonths, showDays: showDays }) + "\n" +
      "Target: " + Model.formatDateNamed(countdownStats.target) + "\n" +
      "Status: " + (countdownStats.isPast ? "Elapsed" : "In Progress") + "\n") : "No target date set\n") +
     "──────────────────────────\n" +
@@ -144,14 +152,10 @@ BarWidget {
     var idx = root.activeEventIndex
     if (idx < 0 || idx >= list.length) idx = 0
     list[idx][key] = val
-    if (key === "targetDate") {
-      list[idx]["startDate"] = new Date().toISOString()
-    }
     var entry = { id: root.moduleName }
     for (var k in root.settings) if (k !== "id") entry[k] = root.settings[k]
     entry["countdowns"] = list
     entry["activeIndex"] = idx
-    // Keep legacy root props synced for compatibility
     if (key === "title") entry["targetLabel"] = val
     if (key === "targetDate") entry["targetDate"] = val
     if (key === "iconStyle") entry["iconStyle"] = val
@@ -169,6 +173,7 @@ BarWidget {
   function applyPreset(presetType) {
     var pDate = Model.getPresetDate(presetType, clock.date)
     updateActiveEvent("targetDate", pDate)
+    triggerSaveFeedback()
   }
 
   function cycleNextCountdown() {
@@ -254,7 +259,7 @@ BarWidget {
 
   implicitWidth: root.vertical
     ? barSize
-    : (buttonHorizontal.implicitWidth + ((root.currentStyle === "progress_track" || root.currentStyle === "dynamic_progress") ? 12 : 0))
+    : (buttonHorizontal.implicitWidth + ((root.currentStyle === "progress_track" || root.currentStyle === "dynamic_progress") ? 16 : 0))
   implicitHeight: root.vertical
     ? (verticalColumn.implicitHeight + 8)
     : barSize
@@ -298,29 +303,30 @@ BarWidget {
     visible: !root.vertical
     anchors.fill: parent
 
-    // Linear Progress Track Background & Dynamic Fill
+    // Visual Progress Track (High Contrast & Clear Progress Fill)
     Rectangle {
+      id: trackBg
       anchors.fill: parent
-      anchors.margins: 2
+      anchors.margins: 3
       visible: (root.currentStyle === "progress_track" || root.currentStyle === "dynamic_progress") && root.countdownStats
       radius: Style.cornerRadius
-      color: root.bar ? Qt.rgba(root.bar.background.r, root.bar.background.g, root.bar.background.b, 0.25) : Qt.rgba(0, 0, 0, 0.20)
+      color: root.bar ? Qt.rgba(root.bar.background.r, root.bar.background.g, root.bar.background.b, 0.50) : Qt.rgba(0, 0, 0, 0.40)
       border.width: 1
-      border.color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.15)
+      border.color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.22)
 
       Rectangle {
         anchors.left: parent.left
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         width: (root.countdownStats && root.countdownStats.ratioElapsed > 0)
-          ? Math.max(4, parent.width * root.countdownStats.ratioElapsed)
+          ? Math.max(6, Math.min(parent.width, parent.width * root.countdownStats.ratioElapsed))
           : 0
         radius: parent.radius
         color: {
           if (root.currentStyle === "dynamic_progress") {
-            return Qt.rgba(root.dynamicColor.r, root.dynamicColor.g, root.dynamicColor.b, 0.35)
+            return Qt.rgba(root.dynamicColor.r, root.dynamicColor.g, root.dynamicColor.b, 0.40)
           }
-          return root.bar ? Qt.rgba(root.bar.barForeground.r, root.bar.barForeground.g, root.bar.barForeground.b, 0.22) : Qt.rgba(1, 1, 1, 0.22)
+          return root.bar ? Qt.rgba(root.bar.barForeground.r, root.bar.barForeground.g, root.bar.barForeground.b, 0.28) : Qt.rgba(1, 1, 1, 0.28)
         }
       }
     }
@@ -338,7 +344,7 @@ BarWidget {
         if (root.currentStyle === "accent_text" || root.currentStyle === "dynamic_progress") return root.dynamicColor
         return root.bar ? root.bar.barForeground : Color.foreground
       }
-      horizontalMargin: (root.currentStyle === "progress_track" || root.currentStyle === "dynamic_progress") ? 6 : 8
+      horizontalMargin: (root.currentStyle === "progress_track" || root.currentStyle === "dynamic_progress") ? 8 : 8
       verticalPadding: 4
       fontSize: Style.font.body
       tooltipText: root.tooltipInfo
@@ -434,9 +440,7 @@ BarWidget {
 
         PanelSeparator { foreground: Color.foreground }
 
-        // -----------------------------------------------------------
-        // Live Hero Preview Card (Dynamic Gradient Accents)
-        // -----------------------------------------------------------
+        // Live Hero Preview Card
         Rectangle {
           width: parent.width
           height: Style.space(74)
@@ -479,9 +483,7 @@ BarWidget {
               text: root.countdownStats ? Model.formatDetailed(root.countdownStats, {
                 showYears: root.showYears,
                 showMonths: root.showMonths,
-                showDays: root.showDays,
-                showHours: root.showHours,
-                showMinutes: root.showMinutes
+                showDays: root.showDays
               }) : "Set target date below"
               color: root.dynamicColor
               font.family: Style.font.family
@@ -491,26 +493,24 @@ BarWidget {
               width: parent.width
             }
 
-            // Progress bar
+            // Visual Progress Track
             Rectangle {
               width: parent.width
-              height: 4
+              height: 5
               radius: 2
-              color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.15)
+              color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.18)
 
               Rectangle {
                 height: parent.height
                 radius: parent.radius
-                width: Math.max(0, parent.width * (root.countdownStats ? root.countdownStats.ratioElapsed : 0))
+                width: Math.max(4, parent.width * (root.countdownStats ? root.countdownStats.ratioElapsed : 0))
                 color: root.dynamicColor
               }
             }
           }
         }
 
-        // -----------------------------------------------------------
-        // Multi-Countdown Events Selector
-        // -----------------------------------------------------------
+        // Multi-Countdown Events Section
         PanelSectionHeader {
           text: "COUNTDOWN EVENTS"
           foreground: Color.foreground
@@ -534,7 +534,7 @@ BarWidget {
           }
 
           Button {
-            text: "+ Add"
+            text: "+ New Event"
             tooltipText: "Create a new countdown target"
             onClicked: root.addNewEvent()
           }
@@ -547,9 +547,7 @@ BarWidget {
           }
         }
 
-        // -----------------------------------------------------------
         // Target Event Configuration (Focus-Safe Inputs)
-        // -----------------------------------------------------------
         PanelSectionHeader {
           text: "EVENT DETAILS"
           foreground: Color.foreground
@@ -604,7 +602,7 @@ BarWidget {
             TextField {
               id: dateInput
               width: parent.width - Style.space(55)
-              placeholderText: "e.g. 01/08/2027, 1-8-2027, 1 Aug 2027, +30d"
+              placeholderText: "e.g. 27/01/2027, 27 Jan, 1 Aug 2027, +30d"
               text: root.rawTargetDate
               onTextEdited: root.updateActiveEvent("targetDate", text)
 
@@ -617,7 +615,7 @@ BarWidget {
             }
           }
 
-          // Quick Presets Row (Outputs in clean DD/MM/YYYY)
+          // Quick Presets Row
           Row {
             width: parent.width
             spacing: Style.spacing.xs
@@ -659,11 +657,20 @@ BarWidget {
               onClicked: root.applyPreset("end_year")
             }
           }
+
+          // Explicit Save / Done Confirmation Action
+          Button {
+            width: parent.width
+            text: root.showSavedFeedback ? "\uf00c Saved!" : "\uf00c Save / Done"
+            tooltipText: "Apply and confirm event changes"
+            active: root.showSavedFeedback
+            accent: root.dynamicColor
+            foreground: root.showSavedFeedback ? root.dynamicColor : Color.foreground
+            onClicked: root.triggerSaveFeedback()
+          }
         }
 
-        // -----------------------------------------------------------
-        // Compact Display Units Configuration (Single Sleek Row)
-        // -----------------------------------------------------------
+        // Compact Display Units Configuration (Strictly Date Units)
         PanelSectionHeader {
           text: "DISPLAY UNITS"
           foreground: Color.foreground
@@ -676,38 +683,30 @@ BarWidget {
           Button {
             text: root.showYears ? "\uf00c Years" : "Years"
             tooltipText: "Toggle years in countdown"
-            width: (parent.width - Style.spacing.xs * 4) / 5
+            width: (parent.width - Style.spacing.xs * 2) / 3
+            active: root.showYears
+            accent: root.dynamicColor
             onClicked: root.updateSetting("showYears", !root.showYears)
           }
           Button {
             text: root.showMonths ? "\uf00c Months" : "Months"
             tooltipText: "Toggle months in countdown"
-            width: (parent.width - Style.spacing.xs * 4) / 5
+            width: (parent.width - Style.spacing.xs * 2) / 3
+            active: root.showMonths
+            accent: root.dynamicColor
             onClicked: root.updateSetting("showMonths", !root.showMonths)
           }
           Button {
             text: root.showDays ? "\uf00c Days" : "Days"
             tooltipText: "Toggle days in countdown"
-            width: (parent.width - Style.spacing.xs * 4) / 5
+            width: (parent.width - Style.spacing.xs * 2) / 3
+            active: root.showDays
+            accent: root.dynamicColor
             onClicked: root.updateSetting("showDays", !root.showDays)
-          }
-          Button {
-            text: root.showHours ? "\uf00c Hours" : "Hours"
-            tooltipText: "Toggle hours in countdown"
-            width: (parent.width - Style.spacing.xs * 4) / 5
-            onClicked: root.updateSetting("showHours", !root.showHours)
-          }
-          Button {
-            text: root.showMinutes ? "\uf00c Mins" : "Mins"
-            tooltipText: "Toggle minutes in countdown"
-            width: (parent.width - Style.spacing.xs * 4) / 5
-            onClicked: root.updateSetting("showMinutes", !root.showMinutes)
           }
         }
 
-        // -----------------------------------------------------------
         // Display Format Style
-        // -----------------------------------------------------------
         PanelSectionHeader {
           text: "FORMAT STYLE"
           foreground: Color.foreground
@@ -718,7 +717,7 @@ BarWidget {
           spacing: Style.spacing.xs
           options: [
             { value: "auto", label: "Auto", tooltip: "Smart adaptive units" },
-            { value: "full", label: "Full", tooltip: "All enabled units (e.g. 1y 2mo 15d 4h 30m)" },
+            { value: "full", label: "Full", tooltip: "All enabled units (e.g. 1y 2mo 15d)" },
             { value: "compact", label: "Compact", tooltip: "Top 2 units only (e.g. 1y 2mo)" },
             { value: "days_only", label: "Days", tooltip: "Total days (e.g. 441d)" },
             { value: "percentage", label: "%", tooltip: "Progress percentage" }
@@ -727,9 +726,7 @@ BarWidget {
           onChanged: function(val) { root.updateSetting("format", val) }
         }
 
-        // -----------------------------------------------------------
-        // Icons Section (Clean, Consistent, No Redundant Buttons)
-        // -----------------------------------------------------------
+        // Icons Section
         PanelSectionHeader {
           text: "ICONS"
           foreground: Color.foreground
@@ -739,7 +736,6 @@ BarWidget {
           width: parent.width
           spacing: Style.spacing.xs
 
-          // Icon Row 1
           ButtonGroup {
             width: parent.width
             spacing: Style.spacing.xs
@@ -753,7 +749,6 @@ BarWidget {
             onChanged: function(val) { root.updateActiveEvent("iconStyle", val) }
           }
 
-          // Icon Row 2
           ButtonGroup {
             width: parent.width
             spacing: Style.spacing.xs
@@ -767,7 +762,6 @@ BarWidget {
             onChanged: function(val) { root.updateActiveEvent("iconStyle", val) }
           }
 
-          // Icon Row 3
           ButtonGroup {
             width: parent.width
             spacing: Style.spacing.xs
@@ -781,7 +775,6 @@ BarWidget {
             onChanged: function(val) { root.updateActiveEvent("iconStyle", val) }
           }
 
-          // Row 4: Custom Icon Option
           Row {
             width: parent.width
             spacing: Style.spacing.xs
@@ -797,7 +790,6 @@ BarWidget {
             }
           }
 
-          // Custom Icon Input
           Row {
             width: parent.width
             spacing: Style.spacing.sm
@@ -829,9 +821,7 @@ BarWidget {
           }
         }
 
-        // -----------------------------------------------------------
-        // Presentation Styles (2x2 Grid - Zero Truncation)
-        // -----------------------------------------------------------
+        // Presentation Styles (2x2 Grid)
         PanelSectionHeader {
           text: "PRESENTATION STYLE"
           foreground: Color.foreground
@@ -900,29 +890,7 @@ BarWidget {
           }
         }
 
-        // -----------------------------------------------------------
-        // Bar Position
-        // -----------------------------------------------------------
-        PanelSectionHeader {
-          text: "BAR POSITION"
-          foreground: Color.foreground
-        }
-
-        ButtonGroup {
-          width: parent.width
-          spacing: Style.spacing.xs
-          options: [
-            { value: "left", label: "Left", tooltip: "Place widget in left section" },
-            { value: "center", label: "Center", tooltip: "Place widget in center section" },
-            { value: "right", label: "Right", tooltip: "Place widget in right section" }
-          ]
-          value: root.currentBarSection
-          onChanged: function(val) { root.moveToSection(val) }
-        }
-
-        // -----------------------------------------------------------
-        // Preferences & Dynamic Features
-        // -----------------------------------------------------------
+        // Preferences
         PanelSectionHeader {
           text: "PREFERENCES"
           foreground: Color.foreground
@@ -944,4 +912,3 @@ BarWidget {
     }
   }
 }
-

@@ -97,7 +97,7 @@ function addMonthsSafe(date, n) {
   var targetY = y + Math.floor(m / 12);
   var targetM = (m % 12 + 12) % 12;
   var maxDays = new Date(targetY, targetM + 1, 0).getDate();
-  return new Date(targetY, targetM, Math.min(d, maxDays), date.getHours(), date.getMinutes(), date.getSeconds());
+  return new Date(targetY, targetM, Math.min(d, maxDays), 0, 0, 0);
 }
 
 /**
@@ -108,7 +108,7 @@ function addYearsSafe(date, n) {
   var m = date.getMonth();
   var targetY = date.getFullYear() + n;
   var maxDays = new Date(targetY, m + 1, 0).getDate();
-  return new Date(targetY, m, Math.min(d, maxDays), date.getHours(), date.getMinutes(), date.getSeconds());
+  return new Date(targetY, m, Math.min(d, maxDays), 0, 0, 0);
 }
 
 /**
@@ -123,9 +123,9 @@ function createValidDate(y, m, d) {
 }
 
 /**
- * Universal flexible date parser.
+ * Universal flexible date parser with intelligent year auto-inference.
  * Parses Day/Month/Year (DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY), ISO (YYYY-MM-DD),
- * Named Month strings ("1 Aug 2027", "Aug 1 2027"), and relative keywords ("tomorrow", "+30d", "next week").
+ * Named Month strings ("1 Aug 2027", "27 Jan", "Aug 1 2027"), and relative keywords ("tomorrow", "+30d", "next week").
  */
 function parseTargetDate(inputStr, now) {
   var base = now instanceof Date ? new Date(now.getTime()) : new Date();
@@ -197,35 +197,38 @@ function parseTargetDate(inputStr, now) {
     return createValidDate(y, m, d);
   }
 
-  // 5. Named Month: DD Month YYYY (e.g. "1 Aug 2027", "23 August 2027")
+  // 5. Named Month: DD Month YYYY or DD Month (e.g. "27 Jan", "1 Aug 2027", "23 August 2027")
   var dmyNamed = cleanStr.match(/^(\d{1,2})\s+([a-z]+)(?:\s+(\d{2,4}))?$/);
   if (dmyNamed && MONTH_NAMES[dmyNamed[2]] !== undefined) {
     var d = parseInt(dmyNamed[1], 10);
     var m = MONTH_NAMES[dmyNamed[2]];
-    var y = dmyNamed[3] ? parseInt(dmyNamed[3], 10) : base.getFullYear();
+    var hasYear = !!dmyNamed[3];
+    var y = hasYear ? parseInt(dmyNamed[3], 10) : base.getFullYear();
     if (y < 100) y += (y < 50 ? 2000 : 1900);
     var res = createValidDate(y, m, d);
-    if (!dmyNamed[3] && res && res < base) {
+    // Intelligent auto-advance: if year was omitted and date is past, target next year
+    if (!hasYear && res && res < base) {
       res = createValidDate(y + 1, m, d);
     }
     return res;
   }
 
-  // 6. Named Month: Month DD YYYY (e.g. "Aug 1 2027", "August 1 2027")
+  // 6. Named Month: Month DD YYYY or Month DD (e.g. "Jan 27", "Aug 1 2027", "August 1")
   var mdyNamed = cleanStr.match(/^([a-z]+)\s+(\d{1,2})(?:\s+(\d{2,4}))?$/);
   if (mdyNamed && MONTH_NAMES[mdyNamed[1]] !== undefined) {
     var m = MONTH_NAMES[mdyNamed[1]];
     var d = parseInt(mdyNamed[2], 10);
-    var y = mdyNamed[3] ? parseInt(mdyNamed[3], 10) : base.getFullYear();
+    var hasYear = !!mdyNamed[3];
+    var y = hasYear ? parseInt(mdyNamed[3], 10) : base.getFullYear();
     if (y < 100) y += (y < 50 ? 2000 : 1900);
     var res = createValidDate(y, m, d);
-    if (!mdyNamed[3] && res && res < base) {
+    if (!hasYear && res && res < base) {
       res = createValidDate(y + 1, m, d);
     }
     return res;
   }
 
-  // 7. Short numeric DD/MM or DD-MM
+  // 7. Short numeric DD/MM or DD-MM (e.g. 27/01) -> Auto-advances if past
   var dmShort = cleanStr.match(/^(\d{1,2})[-\/\.](\d{1,2})$/);
   if (dmShort) {
     var d = parseInt(dmShort[1], 10);
@@ -257,7 +260,7 @@ function formatDateDisplay(date) {
 }
 
 /**
- * Formats a Date object as clean readable string (e.g. "1 Aug 2027").
+ * Formats a Date object as clean readable string (e.g. "27 Jan 2027").
  */
 function formatDateNamed(date) {
   if (!(date instanceof Date) || isNaN(date.getTime())) return "";
@@ -311,13 +314,13 @@ function getPresetDate(type, now) {
 }
 
 /**
- * Calendar-aware countdown calculation.
- * Accurately calculates standard breakdown and total accumulated units.
+ * Calendar-aware DATE-ONLY countdown calculation (Strictly Years, Months, Days).
  */
 function calculateCountdown(targetDateStr, now, startDateStr) {
-  var current = now instanceof Date ? now : new Date();
-  var target = parseTargetDate(targetDateStr, current);
+  var current = now instanceof Date ? new Date(now.getTime()) : new Date();
+  current.setHours(0, 0, 0, 0);
 
+  var target = parseTargetDate(targetDateStr, current);
   if (!target) return null;
 
   var diffMs = target.getTime() - current.getTime();
@@ -327,11 +330,7 @@ function calculateCountdown(targetDateStr, now, startDateStr) {
   var start = isPast ? target : current;
   var end = isPast ? current : target;
 
-  var totalMs = Math.abs(diffMs);
-  var totalSeconds = Math.floor(totalMs / 1000);
-  var totalMinutes = Math.floor(totalSeconds / 60);
-  var totalHours = Math.floor(totalMinutes / 60);
-  var totalDays = Math.floor(totalHours / 24);
+  var totalDays = Math.round(Math.abs(diffMs) / (24 * 3600 * 1000));
 
   // Calendar-accurate breakdown using safe step arithmetic
   var temp = new Date(start.getTime());
@@ -361,7 +360,7 @@ function calculateCountdown(targetDateStr, now, startDateStr) {
 
   var days = 0;
   while (true) {
-    var nextD = new Date(temp.getFullYear(), temp.getMonth(), temp.getDate() + 1, temp.getHours(), temp.getMinutes(), temp.getSeconds());
+    var nextD = new Date(temp.getFullYear(), temp.getMonth(), temp.getDate() + 1, 0, 0, 0);
     if (nextD <= end) {
       days++;
       temp = nextD;
@@ -370,43 +369,21 @@ function calculateCountdown(targetDateStr, now, startDateStr) {
     }
   }
 
-  var hours = 0;
-  while (true) {
-    var nextH = new Date(temp.getFullYear(), temp.getMonth(), temp.getDate(), temp.getHours() + 1, temp.getMinutes(), temp.getSeconds());
-    if (nextH <= end) {
-      hours++;
-      temp = nextH;
-    } else {
-      break;
-    }
-  }
-
-  var minutes = 0;
-  while (true) {
-    var nextMin = new Date(temp.getFullYear(), temp.getMonth(), temp.getDate(), temp.getHours(), temp.getMinutes() + 1, temp.getSeconds());
-    if (nextMin <= end) {
-      minutes++;
-      temp = nextMin;
-    } else {
-      break;
-    }
-  }
-
-  var seconds = Math.floor((end.getTime() - temp.getTime()) / 1000);
-
   // Baseline start calculation for percentage progression
   var baselineDate = null;
   if (startDateStr && typeof startDateStr === "string" && startDateStr.trim() !== "") {
     var parsedStart = new Date(startDateStr);
-    if (!isNaN(parsedStart.getTime()) && parsedStart < target) {
+    parsedStart.setHours(0, 0, 0, 0);
+    if (!isNaN(parsedStart.getTime()) && parsedStart < target && parsedStart < current) {
       baselineDate = parsedStart;
     }
   }
 
   if (!baselineDate) {
+    // Default baseline to beginning of current year (or 6 months before target)
     baselineDate = new Date(current.getFullYear(), 0, 1, 0, 0, 0);
-    if (baselineDate >= target) {
-      baselineDate = new Date(target.getTime() - Math.max(diffMs, 7 * 24 * 3600 * 1000));
+    if (baselineDate >= target || baselineDate >= current) {
+      baselineDate = new Date(target.getTime() - Math.max(Math.abs(diffMs), 30 * 24 * 3600 * 1000));
     }
   }
 
@@ -434,36 +411,27 @@ function calculateCountdown(targetDateStr, now, startDateStr) {
     years: years,
     months: months,
     days: days,
-    hours: hours,
-    minutes: minutes,
-    seconds: seconds,
     totalDays: totalDays,
-    totalHours: totalHours,
-    totalMinutes: totalMinutes,
-    totalSeconds: totalSeconds,
-    totalMs: totalMs,
     isPast: isPast,
     isExpired: isExpired,
     ratioRemaining: ratioRemaining,
     ratioElapsed: ratioElapsed,
     percentRemaining: percentRemaining,
     percentElapsed: percentElapsed,
-    percentStr: percentElapsed.toFixed(0) + "%"
+    percentStr: Math.round(percentElapsed) + "%"
   };
 }
 
 /**
- * Computes active units dynamically according to which units are enabled.
- * If Years or Months are disabled, their values roll over into Days/Hours/Minutes.
+ * Computes active units dynamically according to which date units are enabled.
+ * If Years or Months are disabled, their values roll over into Days.
  */
 function getActiveUnitValues(stats, settings) {
-  if (!stats) return { years: 0, months: 0, days: 0, hours: 0, minutes: 0, seconds: 0 };
+  if (!stats) return { years: 0, months: 0, days: 0 };
 
   var showY = settings ? settings.showYears !== false : true;
   var showM = settings ? settings.showMonths !== false : true;
   var showD = settings ? settings.showDays !== false : true;
-  var showH = settings ? settings.showHours !== false : true;
-  var showMin = settings ? settings.showMinutes !== false : true;
 
   var current = stats.current;
   var target = stats.target;
@@ -497,7 +465,7 @@ function getActiveUnitValues(stats, settings) {
   var days = 0;
   if (showD) {
     while (true) {
-      var nextD = new Date(temp.getFullYear(), temp.getMonth(), temp.getDate() + 1, temp.getHours(), temp.getMinutes(), temp.getSeconds());
+      var nextD = new Date(temp.getFullYear(), temp.getMonth(), temp.getDate() + 1, 0, 0, 0);
       if (nextD <= end) {
         days++;
         temp = nextD;
@@ -505,42 +473,15 @@ function getActiveUnitValues(stats, settings) {
     }
   }
 
-  var hours = 0;
-  if (showH) {
-    while (true) {
-      var nextH = new Date(temp.getFullYear(), temp.getMonth(), temp.getDate(), temp.getHours() + 1, temp.getMinutes(), temp.getSeconds());
-      if (nextH <= end) {
-        hours++;
-        temp = nextH;
-      } else break;
-    }
-  }
-
-  var minutes = 0;
-  if (showMin) {
-    while (true) {
-      var nextMin = new Date(temp.getFullYear(), temp.getMonth(), temp.getDate(), temp.getHours(), temp.getMinutes() + 1, temp.getSeconds());
-      if (nextMin <= end) {
-        minutes++;
-        temp = nextMin;
-      } else break;
-    }
-  }
-
-  var seconds = Math.floor((end.getTime() - temp.getTime()) / 1000);
-
   return {
     years: years,
     months: months,
-    days: days,
-    hours: hours,
-    minutes: minutes,
-    seconds: seconds
+    days: days
   };
 }
 
 /**
- * Formats the bar text according to settings and format styles.
+ * Formats the bar text cleanly WITHOUT negative sign (-) when title is off.
  */
 function formatBarText(stats, settings) {
   if (!stats) return "No Target";
@@ -556,11 +497,7 @@ function formatBarText(stats, settings) {
   }
 
   if (fmt === "days_only") {
-    return prefix + (stats.isPast ? "-" : "") + stats.totalDays + "d";
-  }
-
-  if (fmt === "hours_only") {
-    return prefix + (stats.isPast ? "-" : "") + stats.totalHours + "h";
+    return prefix + stats.totalDays + "d";
   }
 
   var u = getActiveUnitValues(stats, settings);
@@ -575,12 +512,6 @@ function formatBarText(stats, settings) {
   if (settings ? settings.showDays : true) {
     if (u.days > 0 || fmt === "full" || (parts.length > 0 && fmt === "auto")) parts.push(u.days + "d");
   }
-  if (settings ? settings.showHours : true) {
-    if (u.hours > 0 || fmt === "full" || (parts.length > 0 && fmt === "auto")) parts.push(u.hours + "h");
-  }
-  if (settings ? settings.showMinutes : true) {
-    if (u.minutes > 0 || fmt === "full" || parts.length === 0) parts.push(u.minutes + "m");
-  }
 
   if (parts.length === 0) {
     parts.push(stats.totalDays + "d");
@@ -590,12 +521,12 @@ function formatBarText(stats, settings) {
     parts = parts.slice(0, 2);
   }
 
-  var res = (stats.isPast ? "-" : "") + parts.join(" ");
+  var res = parts.join(" ");
   return prefix + res;
 }
 
 /**
- * Returns a detailed multiline breakdown string for popups and tooltips.
+ * Returns a detailed multiline breakdown string for popups and hero cards.
  */
 function formatDetailed(stats, settings) {
   if (!stats) return "No target date set";
@@ -606,11 +537,9 @@ function formatDetailed(stats, settings) {
   if ((settings ? settings.showYears : true) && u.years > 0) parts.push(u.years + "y");
   if ((settings ? settings.showMonths : true) && u.months > 0) parts.push(u.months + "mo");
   if ((settings ? settings.showDays : true) && (u.days > 0 || parts.length > 0)) parts.push(u.days + "d");
-  if (settings ? settings.showHours : true) parts.push(u.hours + "h");
-  if (settings ? settings.showMinutes : true) parts.push(u.minutes + "m");
 
   if (parts.length === 0) {
-    parts.push(stats.totalDays + "d " + stats.hours + "h " + stats.minutes + "m");
+    parts.push(stats.totalDays + "d");
   }
 
   return (stats.isPast ? "Elapsed: " : "") + parts.join(" ");
@@ -654,69 +583,65 @@ function getIcon(iconStyle, customEmoji) {
 }
 
 /**
- * Computes calibrated dynamic timeline gradient color from Green -> Yellow -> Orange -> Red.
- * Correctly accounts for long-range events (e.g. 1 year away is 100% Pure Green)
- * as well as short-range countdowns.
+ * Computes calibrated dynamic timeline gradient color from Green -> Lime -> Yellow -> Orange -> Red.
+ * Correctly accounts for long-range events (e.g. 6 months away is 100% Pure Green #50fa7b).
  */
 function getProgressColor(stats) {
-  if (!stats || stats.isPast) return "#ff5555"; // Red / Expired
+  if (!stats) return "#50fa7b";
+  if (stats.isPast) return "#888888"; // Muted for past/elapsed events
 
   var days = stats.totalDays !== undefined ? stats.totalDays : 0;
-  var hours = stats.totalHours !== undefined ? stats.totalHours : 0;
-  var ratioRem = stats.ratioRemaining !== undefined ? stats.ratioRemaining : 1.0;
 
-  // Calibrated ratio based on horizon and relative duration
-  var r = 1.0;
+  // Calibrated smooth color stops:
+  // >= 60 days (2+ months, e.g. 6 months): 100% Pure Crisp Green (#50fa7b)
   if (days >= 60) {
-    r = 1.0; // 100% Pure Green (events > 2 months away)
-  } else if (days >= 21) {
-    // 60d to 21d: Green (1.0) down to Lime (0.70)
-    r = 0.70 + (0.30 * (days - 21) / 39.0);
-  } else if (days >= 7) {
-    // 21d to 7d: Lime (0.70) down to Warm Yellow (0.40)
-    r = 0.40 + (0.30 * (days - 7) / 14.0);
-  } else if (days >= 2) {
-    // 7d to 2d: Warm Yellow (0.40) down to Vivid Orange (0.15)
-    r = 0.15 + (0.25 * (days - 2) / 5.0);
-  } else {
-    // < 2 days (48h down to 0): Vivid Orange (0.15) down to Crimson Red (0.0)
-    r = Math.max(0.0, 0.15 * (hours / 48.0));
+    return "#50fa7b";
   }
 
-  // If user configured a specific start date with higher relative remaining ratio, respect it
-  if (ratioRem > r) {
-    r = ratioRem;
+  // 60d down to 30d (1-2 months): Pure Green (#50fa7b) down to Lime Green (#a3e635)
+  if (days >= 30) {
+    var t = (days - 30) / 30.0;
+    var red = Math.round(163 + (80 - 163) * t);
+    var green = Math.round(230 + (250 - 230) * t);
+    var blue = Math.round(53 + (123 - 53) * t);
+    var hexR = (red < 16 ? "0" : "") + red.toString(16);
+    var hexG = (green < 16 ? "0" : "") + green.toString(16);
+    var hexB = (blue < 16 ? "0" : "") + blue.toString(16);
+    return "#" + hexR + hexG + hexB;
   }
 
-  // 4-stop smooth RGB color interpolation
-  var red = 0;
-  var green = 0;
-  var blue = 0;
-
-  if (r >= 0.6) {
-    // Green (1.0) to Yellow (0.6)
-    var t = (r - 0.6) / 0.4;
-    red = Math.round(241 + (80 - 241) * t);
-    green = Math.round(250 + (250 - 250) * t);
-    blue = Math.round(140 + (123 - 140) * t);
-  } else if (r >= 0.25) {
-    // Yellow (0.6) to Orange (0.25)
-    var t = (r - 0.25) / 0.35;
-    red = Math.round(255 + (241 - 255) * t);
-    green = Math.round(184 + (250 - 184) * t);
-    blue = Math.round(108 + (140 - 108) * t);
-  } else {
-    // Orange (0.25) to Red (0.0)
-    var t = r / 0.25;
-    red = Math.round(255 + (255 - 255) * t);
-    green = Math.round(85 + (184 - 85) * t);
-    blue = Math.round(85 + (108 - 85) * t);
+  // 30d down to 14d (2-4 weeks): Lime Green (#a3e635) down to Warm Amber Yellow (#f1fa8c)
+  if (days >= 14) {
+    var t = (days - 14) / 16.0;
+    var red = Math.round(241 + (163 - 241) * t);
+    var green = Math.round(250 + (230 - 250) * t);
+    var blue = Math.round(140 + (53 - 140) * t);
+    var hexR = (red < 16 ? "0" : "") + red.toString(16);
+    var hexG = (green < 16 ? "0" : "") + green.toString(16);
+    var hexB = (blue < 16 ? "0" : "") + blue.toString(16);
+    return "#" + hexR + hexG + hexB;
   }
 
+  // 14d down to 3d (3-14 days): Warm Yellow (#f1fa8c) down to Vivid Orange (#ffb86c)
+  if (days >= 3) {
+    var t = (days - 3) / 11.0;
+    var red = Math.round(255 + (241 - 255) * t);
+    var green = Math.round(184 + (250 - 184) * t);
+    var blue = Math.round(108 + (140 - 108) * t);
+    var hexR = (red < 16 ? "0" : "") + red.toString(16);
+    var hexG = (green < 16 ? "0" : "") + green.toString(16);
+    var hexB = (blue < 16 ? "0" : "") + blue.toString(16);
+    return "#" + hexR + hexG + hexB;
+  }
+
+  // < 3 days (0-3 days): Vivid Orange (#ffb86c) down to Crimson Red (#ff5555)
+  var t = days / 3.0;
+  var red = Math.round(255 + (255 - 255) * t);
+  var green = Math.round(85 + (184 - 85) * t);
+  var blue = Math.round(85 + (108 - 85) * t);
   var hexR = (red < 16 ? "0" : "") + red.toString(16);
   var hexG = (green < 16 ? "0" : "") + green.toString(16);
   var hexB = (blue < 16 ? "0" : "") + blue.toString(16);
-
   return "#" + hexR + hexG + hexB;
 }
 
@@ -732,7 +657,7 @@ function isUrgent(stats, thresholdDays) {
  * Cycles to the next available display format.
  */
 function nextFormat(current) {
-  var formats = ["auto", "full", "compact", "days_only", "hours_only", "percentage"];
+  var formats = ["auto", "full", "compact", "days_only", "percentage"];
   var idx = formats.indexOf(current);
   if (idx === -1) return formats[0];
   return formats[(idx + 1) % formats.length];
@@ -757,6 +682,7 @@ function nextStyle(current) {
   if (idx === -1) return styles[0];
   return styles[(idx + 1) % styles.length];
 }
+
 
 
 

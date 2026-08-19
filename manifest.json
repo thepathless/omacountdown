@@ -33,8 +33,6 @@
       "showYears": true,
       "showMonths": true,
       "showDays": true,
-      "showHours": true,
-      "showMinutes": true,
       "showLabel": true,
       "style": "dynamic_progress",
       "gradientColor": true,
@@ -78,11 +76,10 @@
           "full",
           "compact",
           "days_only",
-          "hours_only",
           "percentage"
         ],
         "defaultValue": "auto",
-        "description": "Format on status bar: 'auto' (smart non-zero units), 'full' (all enabled units), 'compact' (top units), 'days_only' (total days), 'hours_only' (total hours), or 'percentage' (progress %)."
+        "description": "Format on status bar: 'auto' (smart non-zero units), 'full' (all enabled units), 'compact' (top units), 'days_only' (total days), or 'percentage' (progress %)."
       },
       {
         "key": "showYears",
@@ -104,20 +101,6 @@
         "label": "Show Days",
         "defaultValue": true,
         "description": "Include days in countdown calculations and display."
-      },
-      {
-        "key": "showHours",
-        "type": "boolean",
-        "label": "Show Hours",
-        "defaultValue": true,
-        "description": "Include hours in countdown calculations and display."
-      },
-      {
-        "key": "showMinutes",
-        "type": "boolean",
-        "label": "Show Minutes",
-        "defaultValue": true,
-        "description": "Include minutes in countdown calculations and display."
       },
       {
         "key": "showLabel",
