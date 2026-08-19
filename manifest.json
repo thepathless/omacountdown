@@ -4,7 +4,7 @@
   "name": "OmaCountdown",
   "version": "1.2.0",
   "author": "Suva",
-  "description": "Elegant countdown timer to any custom date and time with configurable units, Omarchy Nerd Font glyphs, dynamic green-to-red timeline gradient, and desktop notifications.",
+  "description": "Elegant countdown timer to any custom date and time with configurable units, Omarchy Nerd Font glyphs, and dynamic green-to-red timeline gradient.",
   "kinds": [
     "bar-widget"
   ],
@@ -30,12 +30,10 @@
       "showMinutes": true,
       "showLabel": true,
       "iconStyle": "medical",
-      "customEmoji": "\uf497",
+      "customEmoji": "\uf0f1",
       "badgeStyle": "flat",
       "gradientColor": true,
-      "urgentThresholdDays": 7,
-      "showNotifications": true,
-      "lastNotifiedThreshold": 101
+      "urgentThresholdDays": 7
     },
     "schema": [
       {
@@ -64,7 +62,7 @@
         "type": "string",
         "label": "Start Date",
         "defaultValue": "",
-        "description": "Timestamp when countdown was started, used for gradient timeline and milestone checkpoints."
+        "description": "Timestamp when countdown was started, used for gradient timeline progression."
       },
       {
         "key": "format",
@@ -149,7 +147,7 @@
         "key": "customEmoji",
         "type": "string",
         "label": "Custom Glyph / Text",
-        "defaultValue": "\uf497",
+        "defaultValue": "\uf0f1",
         "description": "Custom Nerd Font glyph or text when iconStyle is 'custom'."
       },
       {
@@ -181,13 +179,6 @@
         "step": 1,
         "defaultValue": 7,
         "description": "Highlight widget in urgent theme color when remaining days are less than or equal to this threshold (0 to disable)."
-      },
-      {
-        "key": "showNotifications",
-        "type": "boolean",
-        "label": "Milestone Desktop Notifications",
-        "defaultValue": true,
-        "description": "Receive desktop checkpoints as your deadline approaches."
       }
     ]
   }

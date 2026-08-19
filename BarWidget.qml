@@ -23,12 +23,10 @@ BarWidget {
   readonly property bool showMinutes: setting("showMinutes", true)
   readonly property bool showLabel: setting("showLabel", true)
   readonly property string currentIconStyle: setting("iconStyle", "medical")
-  readonly property string customEmoji: setting("customEmoji", "\uf497")
+  readonly property string customEmoji: setting("customEmoji", "\uf0f1")
   readonly property string currentBadgeStyle: setting("badgeStyle", "flat")
   readonly property bool currentGradientColor: setting("gradientColor", true)
   readonly property int currentUrgentThresholdDays: setting("urgentThresholdDays", 7)
-  readonly property bool currentShowNotifications: setting("showNotifications", true)
-  property int lastNotifiedThreshold: setting("lastNotifiedThreshold", 101)
 
   // Current bar section (left, center, right)
   readonly property string currentBarSection: {
@@ -51,7 +49,6 @@ BarWidget {
 
   // Live countdown stats calculation
   property var countdownStats: Model.calculateCountdown(targetDate, targetTime, clock.date, startDate)
-  property var prevCountdownStats: null
   property real lastWheelTime: 0
 
   readonly property bool isUrgentState: Model.isUrgent(countdownStats, currentUrgentThresholdDays)
@@ -80,36 +77,30 @@ BarWidget {
   })
   readonly property string fullLabel: (activeIcon !== "" ? (activeIcon + (activeText !== "" ? " " + activeText : "")) : activeText)
 
-  readonly property string notifyScriptPath: Qt.resolvedUrl("scripts/notify-status.sh").toString().replace(/^file:\/\//, "")
-
-  readonly property string tooltipInfo: "OmaCountdown • " + (targetLabel || "Event") + "\n" +
-    (countdownStats ? ("⏳ Remaining: " + Model.formatDetailed(countdownStats, { showYears: showYears, showMonths: showMonths, showDays: showDays, showHours: showHours, showMinutes: showMinutes }) + "\n" +
-     "🎯 Target: " + Model.formatDateISO(countdownStats.target) + " " + Model.formatTimeISO(countdownStats.target) + "\n" +
-     "📊 Status: " + (countdownStats.isPast ? "Completed" : "In Progress") + "\n") : "No target date set\n") +
+  // Clean Omarchy Tooltip Info (monochrome typography, zero unicode emoji noise)
+  readonly property string tooltipInfo: (targetLabel || "Event") + "\n" +
+    (countdownStats ? ("Remaining: " + Model.formatDetailed(countdownStats, { showYears: showYears, showMonths: showMonths, showDays: showDays, showHours: showHours, showMinutes: showMinutes }) + "\n" +
+     "Target: " + Model.formatDateISO(countdownStats.target) + " " + Model.formatTimeISO(countdownStats.target) + "\n" +
+     "Status: " + (countdownStats.isPast ? "Elapsed" : "In Progress") + "\n") : "No target date set\n") +
     "──────────────────────────\n" +
     "• Left-click: Settings & Controls\n" +
     "• Middle-click: Cycle Format (" + currentFormat + ")\n" +
     "• Right-click: Settings & Controls"
 
   function updateTime() {
-    var newStats = Model.calculateCountdown(targetDate, targetTime, clock.date, startDate)
-    if (currentShowNotifications && newStats !== null && !newStats.isPast) {
-      var milestone = Model.checkMilestone(prevCountdownStats, newStats, lastNotifiedThreshold, {
-        showYears: showYears,
-        showMonths: showMonths,
-        showDays: showDays,
-        showHours: showHours,
-        showMinutes: showMinutes
-      })
-      if (milestone && milestone.threshold !== lastNotifiedThreshold) {
-        lastNotifiedThreshold = milestone.threshold
-        updateSetting("lastNotifiedThreshold", milestone.threshold)
-        sendMilestoneNotification(milestone)
-      }
-    }
-    prevCountdownStats = newStats
-    countdownStats = newStats
+    countdownStats = Model.calculateCountdown(targetDate, targetTime, clock.date, startDate)
   }
+
+  onTargetDateChanged: root.updateTime()
+  onTargetTimeChanged: root.updateTime()
+  onStartDateChanged: root.updateTime()
+  onShowYearsChanged: root.updateTime()
+  onShowMonthsChanged: root.updateTime()
+  onShowDaysChanged: root.updateTime()
+  onShowHoursChanged: root.updateTime()
+  onShowMinutesChanged: root.updateTime()
+  onCurrentFormatChanged: root.updateTime()
+  onCurrentGradientColorChanged: root.updateTime()
 
   function cycleFormat() {
     var next = Model.nextFormat(currentFormat)
@@ -144,6 +135,7 @@ BarWidget {
 
     // Applied locally first so UI changes reactively on the click itself
     root.settings = entry
+    root.updateTime()
 
     // Persist cleanly via shell host
     if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === "function") {
@@ -159,9 +151,8 @@ BarWidget {
     for (var k in root.settings) if (k !== "id") entry[k] = root.settings[k]
     entry["targetDate"] = dateStr
     entry["startDate"] = new Date().toISOString()
-    entry["lastNotifiedThreshold"] = 101
-    root.lastNotifiedThreshold = 101
     root.settings = entry
+    root.updateTime()
     if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === "function") {
       root.bar.shell.updateEntryInline(root.moduleName, entry)
     }
@@ -209,35 +200,6 @@ BarWidget {
     }
   }
 
-  function sendMilestoneNotification(milestone) {
-    if (notifyProc.running) return
-    var prefix = root.activeIcon !== "" ? (root.activeIcon + " ") : ""
-    var title = prefix + (targetLabel || "Countdown")
-    var body = "⏳ " + milestone.remainingText + " remaining until " + (targetLabel || "event") + "\n" +
-               "🎯 Target: " + (countdownStats ? (Model.formatDateISO(countdownStats.target) + " " + Model.formatTimeISO(countdownStats.target)) : "")
-    notifyProc.command = [root.notifyScriptPath, title, body, isUrgentState ? "true" : "false"]
-    notifyProc.running = true
-  }
-
-  function sendStatusNotification() {
-    if (notifyProc.running) return
-    var prefix = root.activeIcon !== "" ? (root.activeIcon + " ") : ""
-    var title = prefix + (targetLabel || "Countdown")
-    var rem = countdownStats ? Model.formatBarText(countdownStats, {
-      showYears: showYears,
-      showMonths: showMonths,
-      showDays: showDays,
-      showHours: showHours,
-      showMinutes: showMinutes,
-      format: "full",
-      showLabel: false
-    }) : "No target date"
-    var body = "⏳ " + rem + " remaining\n" +
-               "🎯 Target: " + (countdownStats ? (Model.formatDateISO(countdownStats.target) + " " + Model.formatTimeISO(countdownStats.target)) : "Not set")
-    notifyProc.command = [root.notifyScriptPath, title, body, isUrgentState ? "true" : "false"]
-    notifyProc.running = true
-  }
-
   Component.onCompleted: {
     updateTime()
   }
@@ -259,11 +221,6 @@ BarWidget {
     function toggle(): void { root.toggleDashboard() }
     function open(): void { dashboardPopup.open = true }
     function close(): void { dashboardPopup.open = false }
-    function notify(): void { root.sendStatusNotification() }
-  }
-
-  Process {
-    id: notifyProc
   }
 
   implicitWidth: root.vertical
@@ -428,7 +385,7 @@ BarWidget {
         spacing: Style.spacing.sm
 
         Text {
-          text: root.activeIcon !== "" ? root.activeIcon : "\uf497"
+          text: root.activeIcon !== "" ? root.activeIcon : "\uf0f1"
           color: root.dynamicColor
           font.family: Style.font.family
           font.pixelSize: Style.font.title
@@ -680,19 +637,19 @@ BarWidget {
           spacing: Style.spacing.xs
 
           Button {
-            text: root.showYears ? "✓ Years" : "Years"
+            text: root.showYears ? "\uf00c Years" : "Years"
             tooltipText: "Toggle years in countdown"
             width: (parent.width - Style.spacing.xs * 2) / 3
             onClicked: root.updateSetting("showYears", !root.showYears)
           }
           Button {
-            text: root.showMonths ? "✓ Months" : "Months"
+            text: root.showMonths ? "\uf00c Months" : "Months"
             tooltipText: "Toggle months in countdown"
             width: (parent.width - Style.spacing.xs * 2) / 3
             onClicked: root.updateSetting("showMonths", !root.showMonths)
           }
           Button {
-            text: root.showDays ? "✓ Days" : "Days"
+            text: root.showDays ? "\uf00c Days" : "Days"
             tooltipText: "Toggle days in countdown"
             width: (parent.width - Style.spacing.xs * 2) / 3
             onClicked: root.updateSetting("showDays", !root.showDays)
@@ -704,13 +661,13 @@ BarWidget {
           spacing: Style.spacing.xs
 
           Button {
-            text: root.showHours ? "✓ Hours" : "Hours"
+            text: root.showHours ? "\uf00c Hours" : "Hours"
             tooltipText: "Toggle hours in countdown"
             width: (parent.width - Style.spacing.xs) / 2
             onClicked: root.updateSetting("showHours", !root.showHours)
           }
           Button {
-            text: root.showMinutes ? "✓ Minutes" : "Minutes"
+            text: root.showMinutes ? "\uf00c Minutes" : "Minutes"
             tooltipText: "Toggle minutes in countdown"
             width: (parent.width - Style.spacing.xs) / 2
             onClicked: root.updateSetting("showMinutes", !root.showMinutes)
@@ -757,7 +714,7 @@ BarWidget {
           width: parent.width
           spacing: Style.spacing.xs
           options: [
-            { value: "medical", label: "\uf497 Med", tooltip: "Stethoscope / Medical" },
+            { value: "medical", label: "\uf0f1 Med", tooltip: "Stethoscope / Medical" },
             { value: "clock", label: "\uf017 Clock", tooltip: "Clock timer" },
             { value: "hourglass", label: "\uf252 Glass", tooltip: "Hourglass" },
             { value: "calendar", label: "\uf073 Cal", tooltip: "Calendar event" }
@@ -800,7 +757,7 @@ BarWidget {
           spacing: Style.spacing.xs
 
           Button {
-            text: root.currentIconStyle === "custom" ? "✓ Custom Glyph" : "Custom Glyph"
+            text: root.currentIconStyle === "custom" ? "\uf00c Custom Glyph" : "Custom Glyph"
             tooltipText: "Enter custom Nerd Font glyph or text"
             width: (parent.width - Style.spacing.xs) / 2
             onClicked: root.updateSetting("iconStyle", "custom")
@@ -832,7 +789,7 @@ BarWidget {
 
           TextField {
             width: parent.width - Style.space(55)
-            placeholderText: "Enter glyph (e.g. \\uf497 or text)"
+            placeholderText: "Enter glyph (e.g. \\uf0f1 or text)"
             text: root.customEmoji
             onTextChanged: root.updateSetting("customEmoji", text)
           }
@@ -904,26 +861,8 @@ BarWidget {
           checked: root.currentGradientColor
           onClicked: root.updateSetting("gradientColor", !root.currentGradientColor)
         }
-
-        Toggle {
-          width: parent.width
-          label: "Milestone Notifications"
-          description: "Receive desktop checkpoints as your deadline approaches"
-          checked: root.currentShowNotifications
-          onClicked: root.updateSetting("showNotifications", !root.currentShowNotifications)
-        }
-      }
-
-      PanelSeparator { foreground: Color.foreground }
-
-      // Action Button
-      Button {
-        width: parent.width
-        text: "Send Notification Summary"
-        iconText: "\udb80\udf7d"
-        tooltipText: "Send desktop notification with countdown status"
-        onClicked: root.sendStatusNotification()
       }
     }
   }
 }
+
