@@ -194,8 +194,13 @@ function parseFlexibleDate(inputStr, now, isStartDate) {
     }
   }
 
-  // Clean ordinal suffixes: 1st, 2nd, 3rd, 4th -> 1, 2, 3, 4
-  var cleanStr = s.replace(/(\d+)(st|nd|rd|th)/g, "$1").replace(/,/g, " ").replace(/\s+/g, " ").trim();
+  // Clean ordinal suffixes (1st, 2nd, 3rd, 4th -> 1, 2, 3, 4) and natural language words (of, on, the, in, at)
+  var cleanStr = s
+    .replace(/(\d+)(st|nd|rd|th)/g, "$1")
+    .replace(/\b(of|on|the|in|at)\b/g, " ")
+    .replace(/,/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
   // 3. ISO format: YYYY-MM-DD
   var isoMatch = cleanStr.match(/^(\d{4})[-\/\.](\d{1,2})[-\/\.](\d{1,2})$/);
