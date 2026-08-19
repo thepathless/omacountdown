@@ -67,6 +67,22 @@ BarWidget {
   }
 
   function triggerSaveFeedback() {
+    if (dateInput && dateInput.text.trim() !== "") {
+      var pTarget = Model.parseTargetDate(dateInput.text, clock.date)
+      if (pTarget) {
+        var fmtT = Model.formatDateDisplay(pTarget)
+        dateInput.text = fmtT
+        updateActiveEvent("targetDate", fmtT)
+      }
+    }
+    if (startInput && startInput.text.trim() !== "") {
+      var pStart = Model.parseStartDate(startInput.text, clock.date)
+      if (pStart) {
+        var fmtS = Model.formatDateDisplay(pStart)
+        startInput.text = fmtS
+        updateActiveEvent("startDate", fmtS)
+      }
+    }
     root.showSavedFeedback = true
     feedbackTimer.restart()
   }
@@ -610,6 +626,24 @@ BarWidget {
               placeholderText: "e.g. 27/01/2027, 27 Jan, 1 Aug 2027, +30d"
               text: root.rawTargetDate
               onTextEdited: root.updateActiveEvent("targetDate", text)
+              onAccepted: {
+                var p = Model.parseTargetDate(text, clock.date)
+                if (p) {
+                  var fmt = Model.formatDateDisplay(p)
+                  text = fmt
+                  root.updateActiveEvent("targetDate", fmt)
+                }
+              }
+              onActiveFocusChanged: {
+                if (!activeFocus && text.trim() !== "") {
+                  var p = Model.parseTargetDate(text, clock.date)
+                  if (p) {
+                    var fmt = Model.formatDateDisplay(p)
+                    text = fmt
+                    root.updateActiveEvent("targetDate", fmt)
+                  }
+                }
+              }
 
               Binding {
                 target: dateInput
@@ -639,6 +673,26 @@ BarWidget {
               placeholderText: "Optional (e.g. 01/01/2026, 1 Jan)"
               text: root.rawStartDate
               onTextEdited: root.updateActiveEvent("startDate", text)
+              onAccepted: {
+                if (text.trim() !== "") {
+                  var p = Model.parseStartDate(text, clock.date)
+                  if (p) {
+                    var fmt = Model.formatDateDisplay(p)
+                    text = fmt
+                    root.updateActiveEvent("startDate", fmt)
+                  }
+                }
+              }
+              onActiveFocusChanged: {
+                if (!activeFocus && text.trim() !== "") {
+                  var p = Model.parseStartDate(text, clock.date)
+                  if (p) {
+                    var fmt = Model.formatDateDisplay(p)
+                    text = fmt
+                    root.updateActiveEvent("startDate", fmt)
+                  }
+                }
+              }
 
               Binding {
                 target: startInput
